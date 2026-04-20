@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodegen --version)",
+      "Bash(brew install:*)",
+      "Bash(xcodebuild -project VoiceflowDesktop.xcodeproj -scheme VoiceflowDesktop -configuration Debug -destination platform=macOS CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM=)",
+      "Bash(curl -s 'https://uvoxbqqxrsqjdcljhjvk.supabase.co/rest/v1/profiles?limit=0' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2b3hicXF4cnNxamRjbGpoanZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0NzAsImV4cCI6MjA5MTc2MzQ3MH0.Z90WFApwYZmpJqlytKMH140RrXntLbRFQMlEwLvMcAU' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2b3hicXF4cnNxamRjbGpoanZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0NzAsImV4cCI6MjA5MTc2MzQ3MH0.Z90WFApwYZmpJqlytKMH140RrXntLbRFQMlEwLvMcAU' -H 'Accept: application/json' -H 'Prefer: count=exact' -I)",
+      "Bash(curl -s -X POST 'https://uvoxbqqxrsqjdcljhjvk.supabase.co/auth/v1/token?grant_type=password' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2b3hicXF4cnNxamRjbGpoanZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0NzAsImV4cCI6MjA5MTc2MzQ3MH0.Z90WFApwYZmpJqlytKMH140RrXntLbRFQMlEwLvMcAU' -H 'Content-Type: application/json' -d '{\"email\":\"test@test.com\",\"password\":\"wrongpass\"}')",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \" import json,sys d=json.load\\(sys.stdin\\) defs = d.get\\('definitions',d.get\\('components',{}\\).get\\('schemas',{}\\)\\) for tbl in ['profiles','user_settings','transcription_sessions','user_roles','style_profiles']: if tbl in defs: print\\(f'=== {tbl} ==='\\) props = defs[tbl].get\\('properties',{}\\) for col,meta in props.items\\(\\): print\\(f' {col}: {meta.get\\(\\\\\"type\\\\\",meta.get\\(\\\\\"format\\\\\",\\\\\"?\\\\\"\\)\\)} {\\\\\"nullable\\\\\" if meta.get\\(\\\\\"nullable\\\\\"\\) or meta.get\\(\\\\\"format\\\\\"\\)==\\\\\"uuid\\\\\" else \\\\\"\\\\\"}'\\) \")",
+      "Bash(curl -s https://uvoxbqqxrsqjdcljhjvk.supabase.co/rest/v1/ -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2b3hicXF4cnNxamRjbGpoanZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0NzAsImV4cCI6MjA5MTc2MzQ3MH0.Z90WFApwYZmpJqlytKMH140RrXntLbRFQMlEwLvMcAU' -H 'Accept: application/openapi+json')",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(list\\(d.keys\\(\\)\\)\\)\\)\")",
+      "Bash(xcodegen generate *)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s https://uvoxbqqxrsqjdcljhjvk.supabase.co/rest/v1/ -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2b3hicXF4cnNxamRjbGpoanZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0NzAsImV4cCI6MjA5MTc2MzQ3MH0.Z90WFApwYZmpJqlytKMH140RrXntLbRFQMlEwLvMcAU' -H 'Accept: application/json')",
+      "Bash(curl -s https://uvoxbqqxrsqjdcljhjvk.supabase.co/rest/v1/ -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2b3hicXF4cnNxamRjbGpoanZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0NzAsImV4cCI6MjA5MTc2MzQ3MH0.Z90WFApwYZmpJqlytKMH140RrXntLbRFQMlEwLvMcAU')",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(curl -s 'https://uvoxbqqxrsqjdcljhjvk.supabase.co/rest/v1/style_profiles?nonexistent_col=eq.foo&limit=0' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2b3hicXF4cnNxamRjbGpoanZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxODc0NzAsImV4cCI6MjA5MTc2MzQ3MH0.Z90WFApwYZmpJqlytKMH140RrXntLbRFQMlEwLvMcAU')"
+    ]
+  }
+}
