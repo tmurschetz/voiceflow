@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Required for network calls to Supabase backend -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Required for microphone recording -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!-- Required for Accessibility API (text insertion into active field) -->
+    <!-- NOTE: This also requires user granting permission in System Settings > Privacy > Accessibility -->
+    <key>com.apple.security.temporary-exception.accessibility</key>
+    <true/>
+
+    <!-- Hardened Runtime — required for notarization -->
+    <!-- Microphone entitlement within hardened runtime -->
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+
+    <!-- Keychain access for secure token storage -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.voiceflow.desktop</string>
+    </array>
+</dict>
+</plist>
