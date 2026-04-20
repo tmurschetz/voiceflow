@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Sparkle
 
 /// Central coordinator: owns the menu bar item, orchestrates startup checks,
 /// and wires together all services.
@@ -15,6 +16,23 @@ import SwiftUI
 ///   8. Request microphone + Accessibility permissions
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+
+    // MARK: - Updater (Sparkle)
+
+    /// Sparkle update controller — manages checking for and installing app updates.
+    ///
+    /// SUFeedURL in Info.plist points to the appcast.xml that lists available versions.
+    /// During the internal beta the feed URL is a placeholder; Sparkle fails gracefully
+    /// when the URL is unreachable (no crash, just a "no updates available" result).
+    ///
+    /// For full auto-install to work the app must be Developer ID signed + notarized.
+    /// In the unsigned/ad-hoc internal beta, Sparkle shows the update but the user
+    /// downloads the new DMG manually.
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     // MARK: - Services
 
@@ -244,6 +262,10 @@ extension AppDelegate: MenuBarControllerDelegate {
             settingsWindowController = nil
             await showLoginWindow()
         }
+    }
+
+    func menuBarDidRequestCheckForUpdates() {
+        updaterController.updater.checkForUpdates()
     }
 
     func menuBarDidRequestQuit() { NSApp.terminate(nil) }

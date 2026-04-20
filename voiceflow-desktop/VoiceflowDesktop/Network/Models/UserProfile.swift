@@ -4,12 +4,17 @@ import Foundation
 
 /// Maps to the `profiles` table.
 ///
-/// Schema note: `user_id` is the FK to `auth.users.id` — this is NOT the same as `id`
-/// (the table's own PK). Queries must filter on `user_id=eq.<auth.user.id>`.
-///
-/// Exact columns used:
-///   id, user_id, email, first_name, last_name, status, approved_at, approved_by,
-///   created_at, updated_at
+/// Verified schema (2026-04-20) — all columns present, no extra columns:
+///   id           uuid  PK  (the table's own primary key — NOT the auth user id)
+///   user_id      uuid  FK → auth.users.id   ← FILTER ON THIS, not on id
+///   email        text  nullable
+///   first_name   text  nullable
+///   last_name    text  nullable
+///   status       enum  user_status: 'active'|'pending'|'suspended'|'rejected'
+///   approved_at  timestamptz  nullable
+///   approved_by  uuid  nullable
+///   created_at   timestamptz
+///   updated_at   timestamptz  nullable
 struct UserProfile: Codable, Identifiable {
     let id: UUID                  // profiles table PK (not the auth user id)
     let userId: UUID              // FK → auth.users.id  [FILTER COLUMN]
@@ -62,11 +67,19 @@ enum UserStatus: String, Codable {
 
 /// Maps to a single row in the `user_roles` table.
 ///
-/// Exact columns: id, user_id, role
-/// Values: 'pending_user' | 'active_user' | 'admin'
+/// Verified schema (2026-04-20):
+///   id       uuid  PK
+///   user_id  uuid  FK → auth.users.id
+///   role     text  'pending_user' | 'active_user' | 'admin'
+///
+/// The table has exactly 3 columns.
+/// created_at, updated_at and any timestamp columns do NOT exist on this table.
+///
+/// Usage in the desktop app: informational only — access control is enforced via
+/// profiles.status ('active' check), not via the role value.
 struct UserRole: Codable {
     let id: UUID
-    let userId: UUID
+    let userId: UUID   // decoded via JSONDecoder.supabase convertFromSnakeCase
     let role: RoleValue
 
     enum RoleValue: String, Codable {

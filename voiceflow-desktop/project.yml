@@ -11,6 +11,9 @@ packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
     from: "2.0.0"
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.0.0"
 
 settings:
   base:
@@ -39,6 +42,7 @@ targets:
       - VoiceflowDesktop/Resources/Info.plist
     dependencies:
       - package: KeyboardShortcuts
+      - package: Sparkle
       - sdk: CoreAudio.framework    # AudioDeviceID, AudioObjectGetPropertyData
       - sdk: AudioToolbox.framework # AudioUnitSetProperty, kAudioOutputUnitProperty_CurrentDevice
       - sdk: CoreGraphics.framework # CGEventPost for ⌘V simulation

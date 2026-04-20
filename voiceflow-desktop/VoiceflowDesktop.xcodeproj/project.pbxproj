@@ -15,6 +15,7 @@
 		36F3E0BC45A7D6359355C01B /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = B6D686FB7744045773898F27 /* KeyboardShortcuts */; };
 		3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79A466290CA8761E783FAE /* ModeProcessor.swift */; };
 		4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C203490056D9249E43F16113 /* SettingsView.swift */; };
+		4B2D36699AF1C9B22BBA917C /* BackendSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D8F3F8DF189109B88D74050 /* BackendSchema.swift */; };
 		5E3B1408BF7CFD8835AA61EB /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3013249724B3FF7C396E8E3 /* Endpoints.swift */; };
 		5ECE84548F90AFA7E7C65828 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A9F2E671A9B5B1A61F6F7B /* PermissionsManager.swift */; };
 		64EBA98BCC8FD1F558D860C5 /* VoiceflowDesktopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */; };
@@ -30,6 +31,7 @@
 		ABAC29EC7E73D3693B3CEE37 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA11DB729E224E2FB0C8FBFA /* LoginViewModel.swift */; };
 		BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */; };
 		C81E7932DD337171B42A703D /* RecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF41F43ECF611F7DF15B6D /* RecordingService.swift */; };
+		C89568B0B9C3E399AD914E03 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E1B0343837002D4D4E417A57 /* Sparkle */; };
 		D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */; };
 		DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986870957B3F79F64AE93655 /* SettingsService.swift */; };
 		EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */; };
@@ -42,6 +44,7 @@
 		21831A47F2593DBBD10B3FD4 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		2C349A69E46B733CAA9C9174 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceflowDesktopApp.swift; sourceTree = "<group>"; };
+		3D8F3F8DF189109B88D74050 /* BackendSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendSchema.swift; sourceTree = "<group>"; };
 		45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		5F5320484F62C23BB51591FA /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		6A3F57B73BF470CEB470FC63 /* TranscriptionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionSession.swift; sourceTree = "<group>"; };
@@ -72,6 +75,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				36F3E0BC45A7D6359355C01B /* KeyboardShortcuts in Frameworks */,
+				C89568B0B9C3E399AD914E03 /* Sparkle in Frameworks */,
 				267C9E58CC635208243DC33B /* CoreAudio.framework in Frameworks */,
 				81695A95F06F15DC159F53E0 /* AudioToolbox.framework in Frameworks */,
 				D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */,
@@ -202,6 +206,7 @@
 			isa = PBXGroup;
 			children = (
 				21831A47F2593DBBD10B3FD4 /* APIClient.swift */,
+				3D8F3F8DF189109B88D74050 /* BackendSchema.swift */,
 				C3013249724B3FF7C396E8E3 /* Endpoints.swift */,
 				0E96CC4EAC2DD3E776065A0B /* Models */,
 			);
@@ -299,6 +304,7 @@
 			name = VoiceflowDesktop;
 			packageProductDependencies = (
 				B6D686FB7744045773898F27 /* KeyboardShortcuts */,
+				E1B0343837002D4D4E417A57 /* Sparkle */,
 			);
 			productName = VoiceflowDesktop;
 			productReference = F9A38204F9282ADCE15BC018 /* VoiceflowDesktop.app */;
@@ -330,6 +336,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AB7C04C06BC494B8F30F1BE9 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
+				1698416A6DD14341B47EA604 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1BE7453690BFCF9286A78B35 /* Products */;
@@ -350,6 +357,7 @@
 				9625DE809DF647E41737ED3F /* AppDelegate.swift in Sources */,
 				BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */,
 				EBD50C5D9B052E3A6D25C060 /* AuthService.swift in Sources */,
+				4B2D36699AF1C9B22BBA917C /* BackendSchema.swift in Sources */,
 				5E3B1408BF7CFD8835AA61EB /* Endpoints.swift in Sources */,
 				8ABD82CEAEE96C5837C4105C /* LoginView.swift in Sources */,
 				ABAC29EC7E73D3693B3CEE37 /* LoginViewModel.swift in Sources */,
@@ -566,6 +574,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		1698416A6DD14341B47EA604 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 		AB7C04C06BC494B8F30F1BE9 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
@@ -581,6 +597,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AB7C04C06BC494B8F30F1BE9 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
+		};
+		E1B0343837002D4D4E417A57 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1698416A6DD14341B47EA604 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,23 +1,162 @@
 # Voiceflow Desktop
 
-macOS menu bar dictation app. Records speech, detects language, processes text in one of three modes, and inserts the result into the active text field.
+macOS menu bar dictation app. Press a shortcut, speak, get the result inserted into whatever you were typing — in Private, Business, or Calm mode.
 
-**Platform:** macOS 13+  
-**Backend:** https://uvoxbqqxrsqjdcljhjvk.supabase.co (existing Lovable project)
+**Platform:** macOS 13 Ventura or later  
+**Backend:** Supabase (`uvoxbqqxrsqjdcljhjvk.supabase.co`) — existing Lovable project
 
 ---
 
-## Quick Start
+## Installing the app (non-developer)
+
+### What you receive
+
+A file called **`Voiceflow-beta.dmg`**.
+
+### Install steps
+
+1. Double-click `Voiceflow-beta.dmg`
+2. Drag **Voiceflow** into the **Applications** folder shown in the window
+3. Eject the DMG (drag it to Trash or press ⌘E)
+4. Open **Voiceflow** from your Applications folder or Spotlight
+
+### First-launch Gatekeeper prompt
+
+Because the app is not yet signed with a paid Apple certificate, macOS will block
+it on the first open. Fix it in one of two ways:
+
+**Option A — right-click:**
+Right-click (or Control-click) `Voiceflow.app` → **Open** → click **Open** in the dialog.
+You only need to do this once.
+
+**Option B — Terminal (one command):**
+```
+xattr -cr /Applications/Voiceflow.app
+```
+Then open the app normally.
+
+### First-run permissions
+
+On first launch Voiceflow will ask for three permissions:
+
+| Permission | Why it's needed |
+|---|---|
+| **Microphone** | To record your voice |
+| **Speech Recognition** | To convert your voice to text (done on-device) |
+| **Accessibility** | To insert text directly into the field you're typing in |
+
+All three appear as system dialogs. Click **Allow** / **Grant Access** for each.  
+If you miss one, go to **System Settings → Privacy & Security** and enable it there.
+
+---
+
+## Using the app
+
+The app lives in your **menu bar** (top-right area of the screen).
+
+| Action | What happens |
+|---|---|
+| Click the waveform icon | Opens the status panel |
+| Press your shortcut once | Starts recording (icon turns red) |
+| Press the same shortcut again | Stops recording, transcribes, processes, inserts text |
+| Right-click the icon | Opens the utility menu (Settings, Updates, Sign Out) |
+
+### Three modes
+
+Each mode has its own keyboard shortcut, configurable in Settings:
+
+| Mode | What it does |
+|---|---|
+| **Private** | Minimal correction — fixes punctuation and capitalisation only. Stays 100% on-device. |
+| **Business** | Rewrites for a professional, customer-facing tone |
+| **Calm** | De-escalates aggressive or frustrated wording |
+
+---
+
+## Checking for updates
+
+Right-click the Voiceflow icon in the menu bar → **Check for Updates…**
+
+> During the internal beta, the update server is not yet live. This menu item is
+> prepared for when updates are published. For now, install new versions by
+> downloading a new DMG.
+
+---
+
+## Building the app yourself
+
+Prerequisites: **Xcode 15+** and `brew install xcodegen`
 
 ```bash
 cd voiceflow-desktop
-make open        # generates VoiceflowDesktop.xcodeproj + opens Xcode
-# Set Team in Signing & Capabilities, then ⌘R
+
+make open          # generate project + open Xcode (first time)
+# Set your Apple Developer Team in Signing & Capabilities, then ⌘R
+
+make build-release # build a Release .app (ad-hoc signed, no Developer account needed)
+make dmg           # build + package as Voiceflow-beta.dmg  ← share this
+make install       # build + install directly to /Applications + launch
 ```
 
-Prerequisites: Xcode 15+, `brew install xcodegen`
+The DMG is produced using only macOS built-in tools — no Homebrew required for packaging.
 
-The backend URL and anon key are already set in `Network/APIClient.swift` — no configuration needed.
+---
+
+## Distribution: phase 1 vs phase 2
+
+### Phase 1 — Internal beta (now, no Apple account needed)
+
+| What | How |
+|---|---|
+| Build | `make dmg` → `Voiceflow-beta.dmg` |
+| Signing | Ad-hoc (`-`) — works on your Mac, shareable with trusted users |
+| Gatekeeper | Users right-click → Open once |
+| Updates | Share a new DMG manually |
+
+This is the current state of the project.
+
+### Phase 2 — Proper distribution (future, requires Apple Developer Program)
+
+Cost: $99/year at [developer.apple.com](https://developer.apple.com)
+
+Steps to unlock full public distribution:
+
+1. **Enrol in Apple Developer Program**
+2. **Create a Developer ID Application certificate** in Xcode → Settings → Accounts
+3. **Set Team ID** in `project.yml` (`DEVELOPMENT_TEAM: YOURTEAMID`)
+4. **Notarize** the app after building:
+   ```bash
+   xcrun notarytool submit Voiceflow-beta.dmg \
+     --apple-id your@email.com \
+     --team-id YOURTEAMID \
+     --password <app-specific-password> \
+     --wait
+   xcrun stapler staple Voiceflow-beta.dmg
+   ```
+5. **Set up a Sparkle appcast** (the auto-update feed):
+   - Host an `appcast.xml` at the URL in `Info.plist → SUFeedURL`
+   - Generate EdDSA keys: run `generate_keys` from the Sparkle package
+   - Set the public key in `Info.plist → SUPublicEDKey`
+   - Sign each release binary with `sign_update`
+   - Users will then receive silent automatic updates inside the app
+
+Once notarized, Gatekeeper accepts the app on any Mac without any extra steps.
+
+---
+
+## Auto-update architecture (Sparkle)
+
+The app uses **[Sparkle 2](https://sparkle-project.org)** — the standard native macOS
+auto-update framework (used by Transmit, BBEdit, and hundreds of other Mac apps).
+
+How it works:
+1. On launch, Sparkle fetches `appcast.xml` from `SUFeedURL`
+2. If a newer version is listed, it prompts the user
+3. User clicks **Install and Relaunch** — Sparkle downloads, verifies, and swaps the app
+4. Updates are signed with EdDSA — only you can publish them
+
+Current status: Sparkle is wired and the menu item exists. The appcast server needs
+to be set up before updates can be delivered (Phase 2).
 
 ---
 
@@ -27,251 +166,86 @@ The backend URL and anon key are already set in `Network/APIClient.swift` — no
 VoiceflowDesktop/
 ├── App/
 │   ├── VoiceflowDesktopApp.swift      # @main entry, NSApplicationDelegate adapter
-│   └── AppDelegate.swift              # Startup sequence + dictation pipeline
+│   └── AppDelegate.swift              # Startup sequence, dictation pipeline, Sparkle
 │
 ├── Core/
-│   ├── Auth/AuthService.swift         # Sign-in, token refresh, Keychain storage
+│   ├── Auth/AuthService.swift         # Sign-in, token refresh (fixed), Keychain
 │   ├── Settings/
 │   │   ├── AppSettings.swift          # Settings model + enums
-│   │   └── SettingsService.swift      # Load (GET) + Save (PATCH/POST) vs. user_settings
-│   ├── Recording/RecordingService.swift     # AVFoundation audio capture
-│   ├── Transcription/TranscriptionService.swift  # [scaffold] audio → transcript
-│   ├── Processing/ModeProcessor.swift       # [scaffold] transcript + mode → text
-│   ├── Output/OutputService.swift           # AX API insertion + clipboard fallback
+│   │   └── SettingsService.swift      # Load (GET) + Save (PATCH/POST) user_settings
+│   ├── Recording/RecordingService.swift     # AVFoundation — default + device-specific
+│   ├── Transcription/TranscriptionService.swift  # SFSpeechRecognizer, on-device
+│   ├── Processing/ModeProcessor.swift       # Edge function call + fallback
+│   ├── Output/OutputService.swift           # AX insert → CGEventPost ⌘V → clipboard
 │   └── Logging/SessionLogger.swift          # POST to transcription_sessions
 │
 ├── Network/
 │   ├── APIClient.swift                # URLSession wrapper, auth headers
-│   ├── Endpoints.swift                # All Supabase paths
+│   ├── Endpoints.swift                # All Supabase paths (schema-verified)
+│   ├── BackendSchema.swift            # Canonical schema reference (documentation)
 │   └── Models/
-│       ├── UserProfile.swift          # profiles + user_roles + Supabase auth types
+│       ├── UserProfile.swift          # profiles + user_roles + auth types
 │       └── TranscriptionSession.swift # transcription_sessions insert model
 │
 ├── Features/
-│   ├── MenuBar/MenuBarController.swift       # NSStatusItem, icon states, popover
+│   ├── MenuBar/MenuBarController.swift      # NSStatusItem, left/right-click handling
 │   ├── StatusPanel/
-│   │   ├── StatusPanelViewModel.swift # AppState + BlockedReason enums
+│   │   ├── StatusPanelViewModel.swift # AppState, BlockedReason
 │   │   └── StatusPanelView.swift      # Compact popover panel
-│   ├── Login/LoginView + LoginViewModel      # Email/password sign-in
-│   └── Settings/SettingsView + SettingsViewModel   # Full settings window
+│   ├── Login/                         # Email/password sign-in window
+│   └── Settings/                      # Full settings window + ViewModel
 │
-├── Shortcuts/ShortcutManager.swift    # Global hotkeys via KeyboardShortcuts pkg
-├── Permissions/PermissionsManager.swift  # Mic + Accessibility permission guidance
+├── Shortcuts/ShortcutManager.swift    # Global hotkeys (KeyboardShortcuts)
+├── Permissions/PermissionsManager.swift  # Mic + Speech + Accessibility guidance
 └── Resources/
-    ├── Info.plist
+    ├── Info.plist                     # SUFeedURL + SUPublicEDKey for Sparkle
     └── VoiceflowDesktop.entitlements
 ```
 
 ---
 
-## Backend Integration
+## Backend
 
-### Connection
+| | |
+|---|---|
+| URL | `https://uvoxbqqxrsqjdcljhjvk.supabase.co` |
+| Auth | Email + password → Supabase Auth v2 |
+| Token storage | macOS Keychain |
+| Schema verified | 2026-04-20 via PostgREST column probing |
 
-| Field | Value |
-|-------|-------|
-| Supabase URL | `https://uvoxbqqxrsqjdcljhjvk.supabase.co` |
-| Anon key | Set in `Network/APIClient.swift` |
-| Auth method | `POST /auth/v1/token?grant_type=password` (email + password) |
-| Token refresh | `POST /auth/v1/token?grant_type=refresh_token` |
-| Session storage | macOS Keychain (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`) |
-
-### Startup Sequence
+### Startup sequence
 
 ```
 1. Load session from Keychain
-2. POST /auth/v1/token?grant_type=refresh_token  → SupabaseSession
-3. GET /rest/v1/profiles?user_id=eq.<auth.user.id>  → UserProfile
-   - profile.status must be 'active' — anything else shows blocked screen
-4. GET /rest/v1/user_roles?user_id=eq.<auth.user.id>  → UserRole (informational)
-5. GET /rest/v1/user_settings?user_id=eq.<auth.user.id>  → AppSettings
+2. POST /auth/v1/token?grant_type=refresh_token  →  refresh JWT
+3. GET  /rest/v1/profiles?user_id=eq.<id>        →  fetch profile
+   └─ profile.status must be 'active' — pending/suspended/rejected → blocked screen
+4. GET  /rest/v1/user_roles?user_id=eq.<id>      →  fetch role (informational)
+5. GET  /rest/v1/user_settings?user_id=eq.<id>   →  load settings
 6. Register global shortcuts
-7. Request Microphone + Accessibility permissions
+7. Request Microphone + Speech + Accessibility permissions
 ```
 
----
+### Verified table schemas
 
-## Real Database Schema (Confirmed)
+| Table | Key columns |
+|---|---|
+| `profiles` | `user_id` (filter), `status` (enum: active/pending/suspended/rejected) |
+| `user_roles` | `user_id`, `role` — 3 columns only, no timestamps |
+| `user_settings` | 14 columns incl. all shortcut/language/output/microphone settings |
+| `transcription_sessions` | 19 columns — append-only log after each dictation |
+| `style_profiles` | `name`, `description`, `is_default`, `active` — not yet read by desktop |
 
-### `profiles`
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | uuid | Table PK — **not** the auth user ID |
-| `user_id` | uuid | FK → `auth.users.id` — **filter column for queries** |
-| `email` | text | |
-| `first_name` | text | |
-| `last_name` | text | |
-| `status` | text | `'pending'` \| `'active'` \| `'suspended'` \| `'rejected'` |
-| `approved_at` | timestamptz | nullable |
-| `approved_by` | uuid | nullable |
-| `created_at` | timestamptz | |
-| `updated_at` | timestamptz | |
-
-**Schema delta from original assumption:** `display_name` → `first_name` + `last_name`. `id` is the table PK, `user_id` is the auth FK. Queries filter on `user_id`, not `id`.
-
-### `user_roles`
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | uuid | PK |
-| `user_id` | uuid | FK → `auth.users.id` |
-| `role` | text | `'pending_user'` \| `'active_user'` \| `'admin'` |
-
-**Schema delta from original assumption:** Role was assumed to be on the `profiles` table. It is a separate table. The app fetches it separately (informational only — access control uses `profiles.status`).
-
-### `user_settings`
-| Column | Type | Desktop use |
-|--------|------|------------|
-| `id` | uuid | PK (DB-managed) |
-| `user_id` | uuid | Filter + insert key |
-| `shortcut_private` | text | `AppSettings.shortcutPrivate` |
-| `shortcut_business` | text | `AppSettings.shortcutBusiness` |
-| `shortcut_calm` | text | `AppSettings.shortcutCalm` |
-| `auto_detect_language` | boolean | `AppSettings.autoDetectLanguage` |
-| `manual_language_override` | text | `AppSettings.manualLanguageOverride.rawValue` |
-| `output_mode` | text | Mapped via `OutputMode.fromDBValue()` / `.dbValue` |
-| `microphone_device` | text | `AppSettings.microphoneDevice` |
-| `auto_insert` | boolean | `AppSettings.autoInsert` |
-| `default_language` | text | `AppSettings.defaultLanguage` |
-| `default_mode` | text | `AppSettings.defaultMode` |
-| `created_at` | timestamptz | DB-managed |
-| `updated_at` | timestamptz | DB-managed |
-
-**Schema deltas from original assumptions:**
-- Column name: `microphone_device` (NOT `microphone_device_id`)
-- `output_mode` default in DB is `'replace'` — **not** `'insert_into_field'`
-- Three extra columns not in original assumption: `auto_insert`, `default_language`, `default_mode`
-- All three are loaded and saved in the round-trip
-
-**`output_mode` value mapping:**
-
-| DB value | App enum | Behaviour |
-|----------|----------|-----------|
-| `'replace'` (default) | `.insertIntoField` | Insert at cursor / replace selection via AX API |
-| `'clipboard'` | `.clipboardOnly` | Copy to clipboard only |
-| Any other | `.insertIntoField` | Safe fallback |
-
-**Save strategy:** PATCH if a settings row exists for the user; POST (insert) if not. The row existence is determined after `loadSettings()`. See `SettingsService.settingsRowExists`.
-
-### `transcription_sessions`
-| Column | Type | Set by |
-|--------|------|--------|
-| `id` | uuid | DB DEFAULT |
-| `user_id` | uuid | App |
-| `mode` | text | `'private'` \| `'business'` \| `'calm'` |
-| `detected_language` | text | App (from transcription result) |
-| `output_mode` | text | App (`OutputMode.dbValue`) |
-| `started_at` | timestamptz | App (pipeline start time) |
-| `finished_at` | timestamptz | App (pipeline end time) |
-| `audio_seconds` | integer | App (from recording) |
-| `success` | boolean | App |
-| `error_message` | text | App (on failure) |
-| `transcription_provider` | text | App (fill when wired) |
-| `processing_provider` | text | App (fill when wired) |
-| `raw_transcript` | text | App |
-| `final_text` | text | App |
-| `duration_seconds` | integer | App (wall-clock) |
-| `word_count` | integer | App (computed) |
-| `character_count` | integer | App (computed) |
-| `status` | text | `'completed'` \| `'failed'` |
-| `created_at` | timestamptz | DB DEFAULT NOW() |
-
-**Schema deltas from original assumptions:** `language_detected` → `detected_language`. Added `started_at`, `finished_at`, `audio_seconds`, `success`, `error_message`, `raw_transcript`, `final_text`, `duration_seconds`, `word_count`, `character_count`, `status`. Use `TranscriptionSessionInsert.completed()` / `.failed()` convenience builders.
-
-### `style_profiles` (read-only from desktop)
-Global and user-specific AI style presets. Not yet used by the desktop app but available via `Endpoints.styleProfiles`.
-
----
-
-## Blocked User States
-
-The app enforces access at the profile status level:
-
-| `profiles.status` | `BlockedReason` | User message |
-|-------------------|-----------------|--------------|
-| `'pending'` | `.pending` | Awaiting admin approval |
-| `'suspended'` | `.suspended` | Account suspended |
-| `'rejected'` | `.rejected` | Registration rejected |
-| `'active'` | — | App is usable |
-
-Users with any non-active status see a blocked screen in the menu bar popover. Global shortcuts are not registered for blocked users.
-
----
-
-## Shortcut Validation
-
-Before saving settings, `AppSettings.shortcutsAreValid` checks:
-- No two **non-empty** shortcuts have the same value
-- Empty shortcuts are allowed (means "not configured")
-
-This intentionally allows partial shortcut configuration. The user can set one or two shortcuts without being forced to configure all three.
-
----
-
-## What's Implemented vs. Scaffold
-
-### ✅ Fully Implemented
-- App lifecycle, menu bar utility, popover panel
-- Login window (email/password → Supabase Auth v2)
-- Session persistence in Keychain + automatic token refresh on startup
-- User profile fetch using `user_id` filter (not `profiles.id`)
-- Status check: active / pending / suspended / rejected → blocked state UI
-- User role fetch from `user_roles` table
-- Settings load (GET + local cache) with all real column names
-- Settings save (PATCH for existing row, POST for new row)
-- `output_mode` DB ↔ app enum mapping (`'replace'` ↔ `.insertIntoField`)
-- Shortcut uniqueness validation (empty shortcuts allowed)
-- Session logging schema wired to real `transcription_sessions` columns
-- Five-state status panel (idle / recording / processing / success / error)
-- Blocked state handling for all four non-active statuses
-- Accessibility permission check + guidance
-- Clipboard output
-- AX API text insertion (works for native AppKit apps)
-
-### 🔧 Scaffold (implement next)
-- `TranscriptionService.transcribe()` — audio → transcript
-- `ModeProcessor.process()` — transcript + mode → processed text
-- Microphone device picker
-- `ShortcutManager` DB sync (reading `KeyboardShortcuts` binding back to a string for DB)
-- `CGEventPost` fallback for browser/Electron text fields
-- `transcription_provider` / `processing_provider` fields filled once AI is wired
-
----
-
-## Next 3 Implementation Steps
-
-**1. Implement transcription (highest priority — nothing works without it)**
-
-Option A — On-device (recommended for Private mode):
-```swift
-// In TranscriptionService.swift
-import Speech
-// SFSpeechRecognizer + SFSpeechAudioBufferRecognitionRequest
-// Write audio Data to temp file, run recognizer, return transcript
-```
-
-Option B — Backend edge function (for accuracy + Swiss German support):
-- Upload audio as multipart to `/functions/v1/process-transcription`
-- The multipart builder is already stubbed in `TranscriptionService.swift`
-
-**2. Implement mode processing**
-
-- `ModeProcessor.process()` calls the same or a different edge function
-- System prompts for all three modes are already defined in `ModeProcessor.ProcessingMode.systemPrompt`
-- Fill in `transcription_provider` and `processing_provider` in `SessionLogger` once known
-
-**3. Wire shortcut-to-DB sync in `SettingsViewModel`**
-
-- `KeyboardShortcuts.shortcut(for: .dictatePrivate)` returns the current `Shortcut?`
-- Convert to display string via `shortcut.description` (e.g. `"⌘⌥P"`)
-- Write into `draft.shortcutPrivate` before calling `settingsService.saveSettings(_:session:)`
-- Implement `syncShortcutsFromRecorder()` in `SettingsViewModel.swift`
+See `Network/BackendSchema.swift` for the complete verified column list.
 
 ---
 
 ## Dependencies
 
 | Package | Purpose |
-|---------|---------|
-| [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | Global hotkey registration with system conflict detection |
+|---|---|
+| [KeyboardShortcuts](https://github.com/sindresorhus/KeyboardShortcuts) | Global hotkey registration |
+| [Sparkle 2](https://github.com/sparkle-project/Sparkle) | Native macOS auto-update |
 
-All other functionality uses native Apple frameworks (AVFoundation, ApplicationServices, AppKit, SwiftUI, Security).
+All other functionality uses Apple system frameworks: AVFoundation, Speech,
+ApplicationServices, AppKit, SwiftUI, Security, CoreAudio, CoreGraphics.
