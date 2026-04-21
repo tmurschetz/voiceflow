@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Ad-hoc build entitlements (no Developer ID / provisioning profile).
+
+        com.apple.security.cs.disable-library-validation:
+            Allows loading embedded frameworks (Sparkle) that are signed with a
+            different identity than the main executable.  Required on macOS 14+
+            with Hardened Runtime when the app is ad-hoc signed (Team ID = "")
+            but embedded frameworks carry a third-party Team ID.
+
+        Do NOT use these entitlements for App Store or notarized builds —
+        use VoiceflowDesktop.entitlements with a real Developer ID instead.
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- Network access (Supabase REST API + auth) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Microphone recording -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+
+    <!-- Accessibility API (text insertion into active field) -->
+    <key>com.apple.security.temporary-exception.accessibility</key>
+    <true/>
+</dict>
+</plist>
