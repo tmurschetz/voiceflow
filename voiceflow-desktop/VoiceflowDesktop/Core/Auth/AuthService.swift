@@ -62,6 +62,16 @@ final class AuthService: ObservableObject {
 
     // MARK: - Token Refresh
 
+    /// Refreshes the current session using the stored refresh token.
+    /// Updates `currentSession` and Keychain on success.
+    /// Call this when an API request returns HTTP 401 to recover from an expired access token.
+    func refreshCurrentSession() async throws {
+        guard let current = currentSession else { throw AuthError.notAuthenticated }
+        let refreshed = try await refreshSession(refreshToken: current.refreshToken)
+        currentSession = refreshed
+        saveSessionToKeychain(refreshed)
+    }
+
     private func refreshSession(refreshToken: String) async throws -> SupabaseSession {
         // GoTrue expects snake_case keys in the JSON body.
         // Without explicit CodingKeys the Swift encoder would emit "refreshToken" (camelCase),

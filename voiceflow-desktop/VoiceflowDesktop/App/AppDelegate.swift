@@ -216,9 +216,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showSettingsWindow() {
-        guard let session = authService.currentSession else { return }
+        guard authService.currentSession != nil else { return }
         if settingsWindowController == nil {
-            let vm = SettingsViewModel(settingsService: settingsService, session: session)
+            let vm = SettingsViewModel(settingsService: settingsService, authService: authService)
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 520, height: 560),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
