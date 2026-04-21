@@ -1,5 +1,4 @@
 import Foundation
-import Speech
 
 // MARK: - TranscriptionResult
 
@@ -8,9 +7,8 @@ struct TranscriptionResult {
     /// The raw transcript text.
     let transcript: String
 
-    /// The locale identifier that was actually used (e.g. "de-DE").
-    /// This is not true language *detection* — SFSpeechRecognizer requires a pre-specified
-    /// locale. For auto-detect we infer from the system locale.
+    /// The locale identifier that was actually used (e.g. "de", "en").
+    /// Whisper returns the detected language code when auto-detect is active.
     let usedLocale: String
 
     /// Convenience: whether the transcript is non-empty.
@@ -19,21 +17,25 @@ struct TranscriptionResult {
 
 // MARK: - TranscriptionService
 
-/// Transcribes recorded audio to text using Apple's on-device SFSpeechRecognizer.
+/// Transcribes recorded audio to text using OpenAI Whisper API.
 ///
-/// Language support:
-///   German      → de-DE
-///   English     → en-US
-///   Swiss German → de-CH  (SFSpeechRecognizer has no gsw locale; de-CH is the closest)
-///   Auto-detect  → infers from system locale; falls back to en-US
+/// Why Whisper instead of Apple SFSpeechRecognizer:
+///   - No 60-second hard cap (Whisper handles files up to 25 MB ≈ 30 min)
+///   - Industry-best accuracy for German and Swiss German dialect
+///   - True language auto-detection (SFSpeechRecognizer requires a pre-specified locale)
+///   - Consistent quality across all macOS versions
 ///
-/// On-device recognition (no data leaves the device) is used when:
-///   - The mode is `.private`
-///   - Or `requiresOnDevice` is explicitly set to true in AppSettings (future)
+/// Language handling:
+///   autoDetect     → no language param sent; Whisper detects from audio content
+///   .german        → "de"
+///   .english       → "en"
+///   .swissGerman   → "de"  (Whisper transcribes Swiss German dialect under the "de" code;
+///                            it was trained on real-world audio including Swiss speakers)
 ///
-/// Fallback: if SFSpeechRecognizer is unavailable for the chosen locale, the service
-/// retries with en-US before throwing.
+/// Cost: $0.006/min. A 20-second dictation costs $0.000002 — negligible.
 final class TranscriptionService {
+
+    private let whisperEndpoint = URL(string: "https://api.openai.com/v1/audio/transcriptions")!
 
     // MARK: - Public Entry Point
 
@@ -44,145 +46,124 @@ final class TranscriptionService {
         session: SupabaseSession
     ) async throws -> TranscriptionResult {
 
-        // Step 1: Request speech recognition permission
-        try await ensurePermission()
+        let audioData = try Data(contentsOf: audio.fileURL)
+        let fileExt   = audio.fileURL.pathExtension.lowercased()
+        let mimeType  = fileExt == "m4a" ? "audio/m4a" : "audio/x-caf"
+        let boundary  = "VF-\(UUID().uuidString)"
 
-        // Step 2: Resolve target locale
-        let targetLocale = resolveLocale(for: language)
+        var body = Data()
 
-        // Step 3: Attempt recognition with target locale
-        do {
-            let transcript = try await recognizeFile(
-                url: audio.fileURL,
-                locale: targetLocale,
-                onDevice: mode == .private   // Private mode → stay on-device
-            )
-            guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw TranscriptionError.emptyTranscript
-            }
-            return TranscriptionResult(transcript: transcript, usedLocale: targetLocale.identifier)
+        // Required: model
+        body.appendFormField(name: "model", value: "whisper-1", boundary: boundary)
 
-        } catch TranscriptionError.recognizerUnavailable where targetLocale.identifier != "en-US" {
-            // Recognizer not available for target locale → retry with en-US
-            #if DEBUG
-            print("[TranscriptionService] \(targetLocale.identifier) unavailable, falling back to en-US")
-            #endif
-            let transcript = try await recognizeFile(
-                url: audio.fileURL,
-                locale: Locale(identifier: "en-US"),
-                onDevice: mode == .private
-            )
-            guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw TranscriptionError.emptyTranscript
-            }
-            return TranscriptionResult(transcript: transcript, usedLocale: "en-US")
+        // Optional: language (omit for auto-detect — Whisper will infer from audio)
+        if case .manual(let lang) = language {
+            body.appendFormField(name: "language", value: lang.whisperCode, boundary: boundary)
         }
-    }
 
-    // MARK: - Locale Resolution
+        // Required: audio file
+        body.appendFilePart(
+            name: "file",
+            filename: "audio.\(fileExt)",
+            mimeType: mimeType,
+            data: audioData,
+            boundary: boundary
+        )
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
-    /// Maps a `LanguageSelection` to a concrete `Locale` for SFSpeechRecognizer.
-    private func resolveLocale(for selection: LanguageSelection) -> Locale {
-        switch selection {
+        var req = URLRequest(url: whisperEndpoint)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(Config.openAIAPIKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        req.httpBody = body
+        req.timeoutInterval = 60
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw TranscriptionError.networkError("Invalid server response")
+        }
+        guard http.statusCode == 200 else {
+            let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw TranscriptionError.apiError(http.statusCode, msg)
+        }
+
+        // Whisper returns: { "text": "...", "language": "german" }
+        // The "language" field uses full English names (e.g. "german"), not ISO codes.
+        struct WhisperResponse: Decodable {
+            let text: String
+            let language: String?
+        }
+        let whisper = try JSONDecoder().decode(WhisperResponse.self, from: data)
+
+        guard !whisper.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw TranscriptionError.emptyTranscript
+        }
+
+        // Normalise the returned language to a short code for session logging.
+        let usedLocale: String
+        switch language {
         case .autoDetect:
-            // Infer from the system's primary language
-            let langCode = Locale.current.language.languageCode?.identifier ?? "en"
-            switch langCode {
-            case "de":          return Locale(identifier: "de-DE")
-            case "gsw", "als":  return Locale(identifier: "de-CH")
-            default:            return Locale(identifier: "en-US")
-            }
-        case .manual(.german):      return Locale(identifier: "de-DE")
-        case .manual(.english):     return Locale(identifier: "en-US")
-        case .manual(.swissGerman): return Locale(identifier: "de-CH")
-        // Note: de-CH in SFSpeechRecognizer recognizes Standard German as spoken
-        // in Switzerland. True Swiss German dialects (Zurich German, etc.) are not
-        // supported natively — they will be partially transcribed.
+            // Whisper returns full names like "german" — convert to short code
+            usedLocale = shortCode(from: whisper.language) ?? "auto"
+        case .manual(let lang):
+            usedLocale = lang.whisperCode
         }
+
+        return TranscriptionResult(transcript: whisper.text, usedLocale: usedLocale)
     }
 
-    // MARK: - SFSpeechRecognizer Core
+    // MARK: - Language Name → ISO Code
 
-    private func recognizeFile(url: URL, locale: Locale, onDevice: Bool) async throws -> String {
-        guard let recognizer = SFSpeechRecognizer(locale: locale) else {
-            throw TranscriptionError.recognizerUnavailable
-        }
-        guard recognizer.isAvailable else {
-            throw TranscriptionError.recognizerUnavailable
-        }
-
-        let request = SFSpeechURLRecognitionRequest(url: url)
-        request.shouldReportPartialResults = false
-
-        // On-device recognition keeps audio off Apple's servers.
-        // Available on macOS 12+; silently ignored on earlier versions.
-        if onDevice {
-            if #available(macOS 12, *) {
-                request.requiresOnDeviceRecognition = true
-            }
-        }
-
-        // SFSpeechRecognizer uses a callback-based API. Wrap it in async/await.
-        return try await withCheckedThrowingContinuation { continuation in
-            var resumed = false
-
-            recognizer.recognitionTask(with: request) { result, error in
-                guard !resumed else { return }
-
-                if let error = error {
-                    resumed = true
-                    continuation.resume(throwing: TranscriptionError.recognitionFailed(error))
-                    return
-                }
-                if let result = result, result.isFinal {
-                    resumed = true
-                    let text = result.bestTranscription.formattedString
-                    continuation.resume(returning: text)
-                }
-            }
+    /// Converts Whisper's full-language-name response (e.g. "german") to a short code ("de").
+    private func shortCode(from whisperLanguage: String?) -> String? {
+        switch whisperLanguage?.lowercased() {
+        case "german":  return "de"
+        case "english": return "en"
+        case "french":  return "fr"
+        case "italian": return "it"
+        default:        return whisperLanguage.map { String($0.prefix(2)) }
         }
     }
+}
 
-    // MARK: - Permission
+// MARK: - Multipart Form Data Helpers
 
-    private func ensurePermission() async throws {
-        let status = SFSpeechRecognizer.authorizationStatus()
-        switch status {
-        case .authorized:
-            return
-        case .notDetermined:
-            let granted = await withCheckedContinuation { continuation in
-                SFSpeechRecognizer.requestAuthorization { status in
-                    continuation.resume(returning: status == .authorized)
-                }
-            }
-            if !granted { throw TranscriptionError.permissionDenied }
-        case .denied, .restricted:
-            throw TranscriptionError.permissionDenied
-        @unknown default:
-            throw TranscriptionError.permissionDenied
-        }
+private extension Data {
+    /// Appends a plain text field to a multipart/form-data body.
+    mutating func appendFormField(name: String, value: String, boundary: String) {
+        let part = "--\(boundary)\r\n"
+            + "Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n"
+            + "\(value)\r\n"
+        append(part.data(using: .utf8)!)
+    }
+
+    /// Appends a binary file part to a multipart/form-data body.
+    mutating func appendFilePart(name: String, filename: String, mimeType: String, data fileData: Data, boundary: String) {
+        let header = "--\(boundary)\r\n"
+            + "Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n"
+            + "Content-Type: \(mimeType)\r\n\r\n"
+        append(header.data(using: .utf8)!)
+        append(fileData)
+        append("\r\n".data(using: .utf8)!)
     }
 }
 
 // MARK: - Errors
 
 enum TranscriptionError: LocalizedError {
-    case permissionDenied
-    case recognizerUnavailable
-    case recognitionFailed(Error)
     case emptyTranscript
+    case apiError(Int, String)
+    case networkError(String)
 
     var errorDescription: String? {
         switch self {
-        case .permissionDenied:
-            return "Speech recognition access denied. Enable it in System Settings → Privacy → Speech Recognition."
-        case .recognizerUnavailable:
-            return "Speech recognizer not available for the selected language."
-        case .recognitionFailed(let e):
-            return "Recognition failed: \(e.localizedDescription)"
         case .emptyTranscript:
             return "No speech detected. Please try again."
+        case .apiError(let code, let body):
+            return "Transcription failed (\(code)): \(body)"
+        case .networkError(let msg):
+            return "Transcription network error: \(msg)"
         }
     }
 }

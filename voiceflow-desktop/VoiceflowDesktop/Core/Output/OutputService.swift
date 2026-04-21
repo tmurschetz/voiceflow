@@ -18,21 +18,30 @@ import CoreGraphics
 ///
 ///  3. **Clipboard only** — written when mode is `.clipboardOnly`.
 ///     Also the silent last-resort if posting CGEvents fails.
+///
+/// Return value: `true` if the clipboard was the final delivery method
+/// (either because mode is `.clipboardOnly`, or because AX insertion failed
+/// and we fell back to clipboard + paste). Callers can use this to show a
+/// "pasted from clipboard" indicator.
 final class OutputService {
 
     // MARK: - Public API
 
-    func output(text: String, mode: OutputMode) async throws {
+    /// Outputs text according to the chosen mode.
+    /// - Returns: `true` if clipboard was used as the delivery mechanism.
+    @discardableResult
+    func output(text: String, mode: OutputMode) async throws -> Bool {
         switch mode {
 
         case .clipboardOnly:
             copyToClipboard(text)
+            return true   // clipboard is the chosen mode, not a fallback
 
         case .insertIntoField:
             // Strategy 1 — AX direct value write (native apps, no clipboard touch)
             if AXIsProcessTrusted() {
                 let axError = attemptAXInsertion(text)
-                if axError == .success { return }
+                if axError == .success { return false }  // inserted cleanly, no clipboard used
                 // Fall through on .cannotComplete (browser / Electron) or .noValue
                 #if DEBUG
                 print("[OutputService] AX insert failed (\(axError.rawValue)) — falling back to paste")
@@ -42,6 +51,7 @@ final class OutputService {
             // Strategy 2 — Clipboard + ⌘V (works in every app)
             copyToClipboard(text)
             simulatePasteKeystroke()
+            return true   // clipboard was involved (paste simulation)
         }
     }
 

@@ -2,17 +2,15 @@
 
 SCHEME   = VoiceflowDesktop
 PROJECT  = VoiceflowDesktop.xcodeproj
-APP_NAME = Voiceflow          # User-visible name of the .app bundle
+# User-visible name of the .app bundle
+APP_NAME = Voiceflow
 BUILD    = .build
 
 # Paths derived from configuration
 APP      = $(BUILD)/Release/$(APP_NAME).app
 DMG      = $(APP_NAME)-beta.dmg
 
-# Read version from Info.plist so the DMG reflects the current build number
-VERSION  = $(shell /usr/libexec/PlistBuddy -c \
-             "Print CFBundleShortVersionString" \
-             VoiceflowDesktop/Resources/Info.plist 2>/dev/null || echo "0.1.0")
+VERSION  = 0.1.0
 
 .PHONY: generate open dev build clean \
         build-release dmg install \
@@ -38,6 +36,9 @@ build: generate
 		-scheme  $(SCHEME)  \
 		-configuration Debug \
 		-derivedDataPath $(BUILD)/DerivedData \
+		CODE_SIGN_IDENTITY="-" \
+		CODE_SIGN_STYLE=Manual \
+		CODE_SIGN_ENTITLEMENTS="" \
 		build
 
 ## Remove all build artefacts
@@ -66,21 +67,70 @@ deps:
 # ─────────────────────────────────────────────────────────────────────────────
 
 ## Build a Release .app with ad-hoc signing (no Developer account needed)
+#
+# Background: XcodeGen generates a project with a Copy Files phase that embeds
+# the KeyboardShortcuts_KeyboardShortcuts.bundle (SPM resource bundle for
+# localised shortcut names). However, XcodeGen does not emit the accompanying
+# bundle-build target, so xcodebuild cannot find the bundle to copy.
+# Fix: pre-build the bundle from the SPM checkout before invoking xcodebuild.
 build-release: generate
 	@echo "→  Building $(APP_NAME) $(VERSION) — Release / ad-hoc signed…"
 	@mkdir -p $(BUILD)/Release
+	@# ── Step 1: resolve SPM packages so the checkout exists ──────────────────
+	@echo "   Resolving SPM packages…"
+	@xcodebuild -resolvePackageDependencies \
+		-project $(PROJECT) \
+		-scheme  $(SCHEME)  \
+		-derivedDataPath $(BUILD)/DerivedData \
+		2>&1 | grep -E "(error:|Resolved)" || true
+	@# ── Step 2: strip Google Drive / Finder extended attributes ─────────────
+	@# codesign rejects files with resource forks — common when working in
+	@# Google Drive or after macOS Finder copies. Strip them from the entire
+	@# DerivedData tree (SourcePackages + any cached build products).
+	@echo "   Stripping extended attributes from DerivedData…"
+	@xattr -cr "$(BUILD)/DerivedData" 2>/dev/null || true
+	@# ── Step 2b: pre-build KeyboardShortcuts resource bundle ─────────────────
+	@echo "   Pre-building KeyboardShortcuts resource bundle…"
+	@BUNDLE_DST="$(BUILD)/DerivedData/Build/Products/Release/KeyboardShortcuts_KeyboardShortcuts.bundle"; \
+	  LPROJ_SRC="$(BUILD)/DerivedData/SourcePackages/checkouts/KeyboardShortcuts/Sources/KeyboardShortcuts/Localization"; \
+	  mkdir -p "$$BUNDLE_DST"; \
+	  if [ -d "$$LPROJ_SRC" ]; then cp -R "$$LPROJ_SRC/"* "$$BUNDLE_DST/" 2>/dev/null; fi; \
+	  xattr -cr "$$BUNDLE_DST" 2>/dev/null || true; \
+	  echo "   ✓ bundle ready at $$BUNDLE_DST"
+	@# ── Step 3: compile + link the app ───────────────────────────────────────
 	xcodebuild \
 		-project $(PROJECT) \
 		-scheme  $(SCHEME)  \
 		-configuration Release \
 		-derivedDataPath $(BUILD)/DerivedData \
-		CONFIGURATION_BUILD_DIR="$(CURDIR)/$(BUILD)/Release" \
 		PRODUCT_NAME="$(APP_NAME)" \
 		CODE_SIGN_IDENTITY="-" \
 		CODE_SIGN_STYLE=Manual \
+		PROVISIONING_PROFILE_SPECIFIER="" \
+		CODE_SIGN_ENTITLEMENTS="" \
 		build \
 		| grep -E "(error:|warning: |Build succeeded|BUILD SUCCEEDED|BUILD FAILED)" || true
-	@test -d "$(APP)" && echo "✅  Built: $(APP)" \
+	@# ── Step 4: copy the assembled .app to our well-known output path ────────
+	@rm -rf "$(APP)"
+	@cp -R "$(BUILD)/DerivedData/Build/Products/Release/$(APP_NAME).app" "$(APP)"
+	@# ── Step 5: re-sign inside-out with ad-hoc + entitlements ────────────────
+	@# macOS 14+ Hardened Runtime enforces library-validation: all loaded
+	@# frameworks must share the main executable's Team ID.  Sparkle ships
+	@# with its own Developer ID, so dyld refuses to load it ad-hoc unless
+	@# com.apple.security.cs.disable-library-validation is present.
+	@# We sign from the inside out: helper tools → Sparkle → app bundle.
+	@echo "   Re-signing app bundle with adhoc entitlements (inside-out)…"
+	@ADHOC_ENT="$(CURDIR)/VoiceflowDesktop/Resources/VoiceflowDesktop-adhoc.entitlements"; \
+	  APP="$(CURDIR)/$(APP)"; \
+	  find "$$APP/Contents/Frameworks" -name "*.framework" -maxdepth 1 | while read fw; do \
+	    codesign --force --sign - "$$fw" 2>/dev/null; \
+	  done; \
+	  find "$$APP/Contents/Frameworks/Sparkle.framework" -name "*.xpc" -o -name "Autoupdate" -o -name "Updater" 2>/dev/null | while read tool; do \
+	    codesign --force --sign - "$$tool" 2>/dev/null; \
+	  done; \
+	  codesign --force --sign - --entitlements "$$ADHOC_ENT" "$$APP"
+	@echo "   ✓ signed"
+	@test -f "$(APP)/Contents/MacOS/$(APP_NAME)" && echo "✅  Built: $(APP)" \
 	  || (echo "❌  Build failed — run 'make build-release' without grep to see full output" && exit 1)
 
 ## Package the Release .app as a drag-install DMG
@@ -90,6 +140,7 @@ dmg: build-release
 	@rm -rf "$(BUILD)/dmg-staging" "$(DMG)"
 	@mkdir -p "$(BUILD)/dmg-staging"
 	@cp -R "$(APP)" "$(BUILD)/dmg-staging/"
+	@cp INSTALL.md "$(BUILD)/dmg-staging/"
 	@ln -s /Applications "$(BUILD)/dmg-staging/Applications"
 	hdiutil create \
 		-volname "$(APP_NAME)" \

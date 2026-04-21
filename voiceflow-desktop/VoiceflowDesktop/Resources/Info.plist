@@ -27,10 +27,6 @@
     <key>NSMicrophoneUsageDescription</key>
     <string>Voiceflow needs microphone access to record your speech for transcription.</string>
 
-    <!-- Speech recognition (SFSpeechRecognizer) -->
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Voiceflow uses on-device speech recognition to convert your voice to text privately.</string>
-
     <!-- Accessibility access (for inserting text into active field) -->
     <key>NSAccessibilityUsageDescription</key>
     <string>Voiceflow needs Accessibility access to insert transcribed text directly into your active text field.</string>

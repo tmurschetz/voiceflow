@@ -39,6 +39,8 @@ enum AppState: Equatable {
     case recording(mode: ProcessingMode)
     case processing
     case success
+    /// Dictation succeeded but text was delivered via clipboard (AX insertion unavailable).
+    case successWithClipboard
     case error(String)
     case blocked(BlockedReason)
 
@@ -48,6 +50,7 @@ enum AppState: Equatable {
         case .recording(let mode): return "Recording — \(mode.displayName)"
         case .processing:          return "Processing…"
         case .success:             return "Done"
+        case .successWithClipboard: return "Pasted from clipboard"
         case .error(let msg):      return "Error: \(msg)"
         case .blocked(let reason): return reason.title
         }
@@ -55,35 +58,38 @@ enum AppState: Equatable {
 
     var color: Color {
         switch self {
-        case .idle:       return .secondary
-        case .recording:  return .red
-        case .processing: return .orange
-        case .success:    return .green
-        case .error:      return .red
-        case .blocked:    return .orange
+        case .idle:                 return .secondary
+        case .recording:            return .red
+        case .processing:           return .orange
+        case .success:              return .green
+        case .successWithClipboard: return .green
+        case .error:                return .red
+        case .blocked:              return .orange
         }
     }
 
     var sfSymbol: String {
         switch self {
-        case .idle:       return "waveform"
-        case .recording:  return "record.circle.fill"
-        case .processing: return "ellipsis.circle"
-        case .success:    return "checkmark.circle.fill"
-        case .error:      return "exclamationmark.triangle.fill"
-        case .blocked:    return "lock.circle.fill"
+        case .idle:                 return "waveform"
+        case .recording:            return "record.circle.fill"
+        case .processing:           return "ellipsis.circle"
+        case .success:              return "checkmark.circle.fill"
+        case .successWithClipboard: return "doc.on.clipboard.fill"
+        case .error:                return "exclamationmark.triangle.fill"
+        case .blocked:              return "lock.circle.fill"
         }
     }
 
     static func == (lhs: AppState, rhs: AppState) -> Bool {
         switch (lhs, rhs) {
-        case (.idle, .idle):                    return true
-        case (.recording(let a), .recording(let b)): return a == b
-        case (.processing, .processing):        return true
-        case (.success, .success):              return true
-        case (.error(let a), .error(let b)):    return a == b
-        case (.blocked(let a), .blocked(let b)): return a == b
-        default:                                return false
+        case (.idle, .idle):                             return true
+        case (.recording(let a), .recording(let b)):     return a == b
+        case (.processing, .processing):                 return true
+        case (.success, .success):                       return true
+        case (.successWithClipboard, .successWithClipboard): return true
+        case (.error(let a), .error(let b)):             return a == b
+        case (.blocked(let a), .blocked(let b)):         return a == b
+        default:                                         return false
         }
     }
 }
@@ -96,4 +102,6 @@ final class StatusPanelViewModel: ObservableObject {
     @Published var state: AppState = .idle
     @Published var profile: UserProfile?
     @Published var settings: AppSettings?
+    /// Elapsed recording seconds, updated every second by a timer in AppDelegate.
+    @Published var recordingSeconds: Int = 0
 }

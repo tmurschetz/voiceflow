@@ -2,7 +2,6 @@ import SwiftUI
 import AppKit
 import AVFoundation
 import ApplicationServices
-import Speech
 import KeyboardShortcuts
 
 /// Full settings screen, opened from the menu bar.
@@ -211,43 +210,34 @@ private struct MicrophoneSection: View {
 // MARK: - Section: Permissions
 
 private struct PermissionsSection: View {
-    @State private var hasMic    = false
-    @State private var hasSpeech = false
-    @State private var hasAX     = false
+    @State private var hasMic = false
+    @State private var hasAX  = false
 
     var body: some View {
         SectionHeader(
             title: "Permissions",
-            subtitle: "All three are needed for full functionality."
+            subtitle: "Microphone is required. Accessibility enables direct text insertion."
         )
 
         VStack(spacing: 8) {
             PermissionRow(
                 icon: "mic.fill",
                 label: "Microphone",
-                note: "Required",
+                note: "Required — to record your speech",
                 granted: hasMic,
                 settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
             )
             PermissionRow(
-                icon: "waveform",
-                label: "Speech Recognition",
-                note: "Required for transcription",
-                granted: hasSpeech,
-                settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
-            )
-            PermissionRow(
                 icon: "keyboard",
                 label: "Accessibility",
-                note: "Optional — enables direct text insertion",
+                note: "Optional — enables direct text insertion (falls back to clipboard)",
                 granted: hasAX,
                 settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
             )
         }
         .onAppear {
-            hasMic    = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-            hasSpeech = SFSpeechRecognizer.authorizationStatus() == .authorized
-            hasAX     = AXIsProcessTrusted()
+            hasMic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            hasAX  = AXIsProcessTrusted()
         }
     }
 }

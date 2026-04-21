@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import Sparkle
 
 /// Central coordinator: owns the menu bar item, orchestrates startup checks,
 /// and wires together all services.
@@ -17,23 +16,6 @@ import Sparkle
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
-    // MARK: - Updater (Sparkle)
-
-    /// Sparkle update controller — manages checking for and installing app updates.
-    ///
-    /// SUFeedURL in Info.plist points to the appcast.xml that lists available versions.
-    /// During the internal beta the feed URL is a placeholder; Sparkle fails gracefully
-    /// when the URL is unreachable (no crash, just a "no updates available" result).
-    ///
-    /// For full auto-install to work the app must be Developer ID signed + notarized.
-    /// In the unsigned/ad-hoc internal beta, Sparkle shows the update but the user
-    /// downloads the new DMG manually.
-    private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: true,
-        updaterDelegate: nil,
-        userDriverDelegate: nil
-    )
-
     // MARK: - Services
 
     let authService        = AuthService()
@@ -47,9 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - UI
 
-    private var menuBarController:      MenuBarController?
-    private var loginWindowController:  NSWindowController?
+    private var menuBarController:        MenuBarController?
+    private var loginWindowController:    NSWindowController?
     private var settingsWindowController: NSWindowController?
+
+    // MARK: - Recording timer
+
+    private var recordingTimer: Timer?
 
     // MARK: - Lifecycle
 
@@ -123,10 +109,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if recordingService.isRecording {
             // Second press: stop → transcribe → process → output → log
             let startedAt = recordingService.recordingStartedAt ?? Date()
-            let audioSeconds = recordingService.currentDurationSeconds
+            let audioSeconds = Int(recordingService.currentDurationSeconds)
             var audio: RecordedAudio?
 
             do {
+                stopRecordingTimer()
                 audio = try await recordingService.stopRecording()
                 guard let audio else { return }
                 await updateMenuBarState(.processing)
@@ -147,8 +134,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     session: session
                 )
 
-                // Output
-                try await outputService.output(text: processed, mode: outputMode)
+                // Output — returns true if clipboard was used instead of AX insertion
+                let usedClipboard = try await outputService.output(text: processed, mode: outputMode)
 
                 // Log success
                 await sessionLogger.logCompleted(
@@ -162,11 +149,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     audioSeconds: audioSeconds
                 )
 
-                await updateMenuBarState(.success)
+                // Show clipboard indicator if direct insertion was unavailable
+                let successState: AppState = (usedClipboard && outputMode == .insertIntoField)
+                    ? .successWithClipboard
+                    : .success
+                await updateMenuBarState(successState)
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 await updateMenuBarState(.idle)
 
             } catch {
+                stopRecordingTimer()
                 await sessionLogger.logFailed(
                     session: session,
                     mode: mode,
@@ -187,6 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 try await recordingService.startRecording(deviceID: settings?.microphoneDevice)
                 await updateMenuBarState(.recording(mode: mode))
+                startRecordingTimer()
             } catch {
                 await updateMenuBarState(.error(error.localizedDescription))
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -242,6 +235,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    // MARK: - Recording Timer
+
+    private func startRecordingTimer() {
+        stopRecordingTimer()
+        recordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.menuBarController?.incrementRecordingSeconds()
+            }
+        }
+    }
+
+    private func stopRecordingTimer() {
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+    }
+
     // MARK: - Helpers
 
     private func updateMenuBarState(_ state: AppState) async {
@@ -265,7 +274,14 @@ extension AppDelegate: MenuBarControllerDelegate {
     }
 
     func menuBarDidRequestCheckForUpdates() {
-        updaterController.updater.checkForUpdates()
+        // Sparkle not active in ad-hoc beta build — updates are distributed via DMG.
+        // Phase 2 (Developer ID + notarization) will re-enable this.
+        let alert = NSAlert()
+        alert.messageText = "Updates coming soon"
+        alert.informativeText = "Auto-updates are not yet enabled in this beta. Download the latest version from your administrator."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     func menuBarDidRequestQuit() { NSApp.terminate(nil) }

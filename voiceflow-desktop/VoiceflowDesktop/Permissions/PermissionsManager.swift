@@ -1,15 +1,13 @@
 import AVFoundation
 import ApplicationServices
 import AppKit
-import Speech
 
-/// Guides the user through granting the three required macOS permissions on first run:
-///   1. Microphone            — to capture audio
-///   2. Speech Recognition    — for SFSpeechRecognizer (on-device transcription)
-///   3. Accessibility         — to insert text into the active text field
+/// Guides the user through granting the two required macOS permissions on first run:
+///   1. Microphone     — to capture audio (required)
+///   2. Accessibility  — to insert text into the active text field (optional, degrades to clipboard)
 ///
-/// Only Microphone and Speech Recognition are requested proactively.
-/// Accessibility shows an informational alert (the user must navigate there manually).
+/// Speech Recognition is NOT requested — Voiceflow uses OpenAI Whisper (cloud API)
+/// which does not require the macOS Speech Recognition entitlement.
 final class PermissionsManager {
 
     // MARK: - Request All
@@ -17,18 +15,14 @@ final class PermissionsManager {
     /// Call once on startup after the user is authenticated and active.
     func requestRequiredPermissions() async {
         await requestMicrophonePermission()
-        await requestSpeechPermission()
         checkAccessibilityPermission()
+        // Speech Recognition removed — Whisper API does not use SFSpeechRecognizer
     }
 
     // MARK: - Status Properties
 
     var hasMicrophonePermission: Bool {
         AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-    }
-
-    var hasSpeechPermission: Bool {
-        SFSpeechRecognizer.authorizationStatus() == .authorized
     }
 
     var hasAccessibilityPermission: Bool {
@@ -59,34 +53,6 @@ final class PermissionsManager {
         }
     }
 
-    // MARK: - Speech Recognition
-
-    func requestSpeechPermission() async {
-        switch SFSpeechRecognizer.authorizationStatus() {
-        case .authorized:
-            return
-        case .notDetermined:
-            _ = await withCheckedContinuation { continuation in
-                SFSpeechRecognizer.requestAuthorization { _ in
-                    continuation.resume(returning: ())
-                }
-            }
-        case .denied, .restricted:
-            await showPermissionAlert(
-                title: "Speech Recognition Required",
-                message: """
-                    Voiceflow uses on-device speech recognition to transcribe your voice.
-
-                    Enable it in:
-                    System Settings → Privacy & Security → Speech Recognition
-                    """,
-                settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
-            )
-        @unknown default:
-            break
-        }
-    }
-
     // MARK: - Accessibility
 
     func checkAccessibilityPermission() {
@@ -96,7 +62,7 @@ final class PermissionsManager {
                 title: "Accessibility Access (Optional)",
                 message: """
                     Voiceflow can insert transcribed text directly into any text field.
-                    Without this, text is copied to the clipboard instead.
+                    Without this, text is pasted via the clipboard instead.
 
                     To enable:
                     System Settings → Privacy & Security → Accessibility

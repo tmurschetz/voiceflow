@@ -59,6 +59,7 @@ final class ShortcutManager {
 
     /// Returns the current shortcut display strings in the order [private, business, calm].
     /// Used when saving settings to write back to the DB.
+    @MainActor
     func currentCombos() -> (private: String, business: String, calm: String) {
         return (
             private:  descriptionFor(.dictatePrivate),
@@ -67,12 +68,11 @@ final class ShortcutManager {
         )
     }
 
+    @MainActor
     private func descriptionFor(_ name: KeyboardShortcuts.Name) -> String {
-        // KeyboardShortcuts.Shortcut.description is not directly available as a static method.
-        // We check if a shortcut is registered and return its string representation.
-        // TODO: This returns the stored UserDefaults string via reflection if available.
-        // For now, return empty — the Recorder UI writes to UserDefaults directly;
-        // SettingsViewModel should read combos before saving.
-        return ""
+        // KeyboardShortcuts.getShortcut(for:) returns the currently registered combo.
+        // .description produces a human-readable string like "⌥⌘P".
+        guard let shortcut = KeyboardShortcuts.getShortcut(for: name) else { return "" }
+        return shortcut.description
     }
 }

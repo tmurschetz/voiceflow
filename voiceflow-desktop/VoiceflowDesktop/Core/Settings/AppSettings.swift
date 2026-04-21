@@ -68,6 +68,12 @@ struct AppSettings: Codable, Equatable {
     var shortcutValidationError: String? {
         shortcutsAreValid ? nil : "Two or more shortcuts are identical. Each must be unique."
     }
+
+    /// True when no shortcuts have been configured yet (all three are empty).
+    /// Used to show a first-run prompt in the status panel.
+    var shortcutsAreAllEmpty: Bool {
+        shortcutPrivate.isEmpty && shortcutBusiness.isEmpty && shortcutCalm.isEmpty
+    }
 }
 
 // MARK: - Language
@@ -84,6 +90,18 @@ enum SupportedLanguage: String, Codable, CaseIterable, Identifiable {
         case .german:      return "German"
         case .english:     return "English"
         case .swissGerman: return "Swiss German"
+        }
+    }
+
+    /// ISO 639-1 code passed to OpenAI Whisper API.
+    /// Swiss German uses "de" — Whisper understands Swiss dialect under the German code
+    /// because it was trained on diverse real-world audio including Swiss speakers.
+    /// Omit entirely for auto-detect (handled in TranscriptionService).
+    var whisperCode: String {
+        switch self {
+        case .german:      return "de"
+        case .english:     return "en"
+        case .swissGerman: return "de"
         }
     }
 }

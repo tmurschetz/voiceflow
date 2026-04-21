@@ -27,7 +27,6 @@ struct LoginView: View {
                         .foregroundStyle(.secondary)
                     TextField("you@example.com", text: $viewModel.email)
                         .textFieldStyle(.roundedBorder)
-                        .textContentType(.emailAddress)
                         .autocorrectionDisabled()
                         .onSubmit { Task { await viewModel.signIn() } }
                 }
@@ -77,6 +76,17 @@ struct LoginView: View {
                 .controlSize(.large)
             }
             .padding(.horizontal, 32)
+
+            // Forgot password link
+            Button("Forgot password?") {
+                if let url = URL(string: Config.webAppURL) {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.top, 6)
 
             Spacer()
 

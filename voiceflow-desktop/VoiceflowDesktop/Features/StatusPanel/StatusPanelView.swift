@@ -9,11 +9,18 @@ struct StatusPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
+            // Header — shows app name + logged-in user
             HStack {
-                Text("Voiceflow")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Voiceflow")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    if let name = viewModel.profile?.displayName {
+                        Text(name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
                 Image(systemName: "waveform.circle.fill")
                     .font(.title3)
@@ -25,16 +32,16 @@ struct StatusPanelView: View {
 
             Divider()
 
-            // State indicator
-            StateRow(state: viewModel.state)
+            // State indicator (with recording timer)
+            StateRow(state: viewModel.state, recordingSeconds: viewModel.recordingSeconds)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
             Divider()
 
-            // Shortcuts hint (shown in idle state)
+            // Shortcuts hint (shown in idle state only)
             if case .idle = viewModel.state {
-                ShortcutsHintView(settings: viewModel.settings)
+                ShortcutsHintView(settings: viewModel.settings, onSettings: onSettings)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                 Divider()
@@ -72,6 +79,7 @@ struct StatusPanelView: View {
 
 private struct StateRow: View {
     let state: AppState
+    let recordingSeconds: Int
     @State private var animating = false
 
     var body: some View {
@@ -97,6 +105,13 @@ private struct StateRow: View {
                     .fontWeight(.medium)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
+
+                // Live timer during recording
+                if case .recording = state {
+                    Text(String(format: "⏺ %d:%02d", recordingSeconds / 60, recordingSeconds % 60))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.red)
+                }
             }
             Spacer()
         }
@@ -112,6 +127,7 @@ private struct StateRow: View {
 
 private struct ShortcutsHintView: View {
     let settings: AppSettings?
+    var onSettings: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -121,9 +137,19 @@ private struct ShortcutsHintView: View {
                 .textCase(.uppercase)
 
             if let s = settings {
-                ShortcutLine(label: "Private",  combo: s.shortcutPrivate)
-                ShortcutLine(label: "Business", combo: s.shortcutBusiness)
-                ShortcutLine(label: "Calm",     combo: s.shortcutCalm)
+                if s.shortcutsAreAllEmpty {
+                    // First-run CTA — no shortcuts configured yet
+                    Button(action: onSettings) {
+                        Label("Open Settings to configure shortcuts", systemImage: "arrow.right.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    ShortcutLine(label: "Private",  combo: s.shortcutPrivate)
+                    ShortcutLine(label: "Business", combo: s.shortcutBusiness)
+                    ShortcutLine(label: "Calm",     combo: s.shortcutCalm)
+                }
             } else {
                 Text("Configure shortcuts in Settings")
                     .font(.caption)

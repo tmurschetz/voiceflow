@@ -105,18 +105,16 @@ struct AuthUser: Codable {
 }
 
 /// Session returned by Supabase Auth on sign-in or token refresh.
+///
+/// No explicit CodingKeys — JSONDecoder.supabase uses convertFromSnakeCase
+/// which maps JSON "access_token" → Swift "accessToken" automatically.
+/// Mixing explicit snake_case CodingKeys with convertFromSnakeCase breaks
+/// decoding because the strategy converts the JSON key to camelCase before
+/// matching against the CodingKey's rawValue, which is still snake_case.
 struct SupabaseSession: Codable {
-    let accessToken: String
-    let refreshToken: String
-    let expiresIn: Int
-    let tokenType: String
-    let user: AuthUser
-
-    enum CodingKeys: String, CodingKey {
-        case accessToken  = "access_token"
-        case refreshToken = "refresh_token"
-        case expiresIn    = "expires_in"
-        case tokenType    = "token_type"
-        case user
-    }
+    let accessToken: String     // JSON: "access_token"
+    let refreshToken: String    // JSON: "refresh_token"
+    let expiresIn: Int?         // JSON: "expires_in" — optional: absent in some Supabase versions
+    let tokenType: String?      // JSON: "token_type" — optional for robustness
+    let user: AuthUser          // JSON: "user"
 }

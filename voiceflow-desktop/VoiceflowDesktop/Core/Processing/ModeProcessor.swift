@@ -17,35 +17,17 @@ enum ProcessingMode: String, CaseIterable {
     }
 
     /// System prompt sent to the AI model via the backend edge function.
-    var systemPrompt: String {
+    /// Reference documentation of what each server-side prompt does.
+    /// The actual prompts live in the Supabase edge function (process-transcription).
+    /// These are kept here as spec documentation only — not sent in API requests.
+    var systemPromptDocumentation: String {
         switch self {
         case .private:
-            return """
-            You are a minimal text corrector. Apply only:
-            - Correct punctuation
-            - Fix capitalization
-            - Add appropriate paragraph breaks
-            Preserve the speaker's exact wording. Do not paraphrase, improve, or restructure.
-            Return only the corrected text with no commentary.
-            """
+            return "Minimal correction: punctuation, capitalisation, paragraph breaks. Exact wording preserved."
         case .business:
-            return """
-            You are a professional business communication editor. Rewrite the text to be:
-            - Customer-facing and professional in tone
-            - Clear, concise, and modern
-            - Pragmatic and credible
-            - Suitable for external communication (not internal Slack/email style)
-            Return only the rewritten text with no commentary.
-            """
+            return "Professional rewrite: customer-facing tone, clear and concise, suitable for external comms."
         case .calm:
-            return """
-            You are a de-escalation communication editor. Rewrite the text to:
-            - Preserve the core message and intent
-            - Remove aggression, sarcasm, insults, and escalating language
-            - Keep the tone calm, direct, and respectful
-            - Avoid being passive-aggressive or condescending
-            Return only the rewritten text with no commentary.
-            """
+            return "De-escalation rewrite: removes aggression/sarcasm, keeps core message, calm and respectful."
         }
     }
 }
@@ -56,28 +38,23 @@ enum ProcessingMode: String, CaseIterable {
 ///
 /// Edge function contract (POST /functions/v1/process-transcription):
 ///
-///   Request body:
+///   Request body (Lovable-deployed schema, verified 2026-04-21):
 ///     {
-///       "text":          String,   // raw transcript
-///       "mode":          String,   // "private" | "business" | "calm"
-///       "language":      String,   // locale used, e.g. "de-DE"
-///       "system_prompt": String    // full system prompt (defined above)
+///       "transcript": String,  // raw transcript text
+///       "mode":       String,  // "private" | "business" | "calm"
+///       "language":   String   // locale used, e.g. "de", "en"
 ///     }
 ///
 ///   Success response (200):
-///     { "result": String }
+///     { "transformed_text": String, "mode": String }
 ///
 ///   Error response:
-///     { "error": String }
+///     { "error": { "formErrors": [], "fieldErrors": { ... } } }
 ///
 /// Fallback behaviour:
 ///   - If the edge function returns 404 (not deployed) or 503 (unavailable),
-///     the raw transcript is returned unchanged. The pipeline still succeeds,
-///     and the user gets plain dictation output.
+///     the raw transcript is returned unchanged. The pipeline still succeeds.
 ///   - For all other HTTP errors, the error is surfaced.
-///
-/// To deploy the edge function, see the backend README or use:
-///   supabase functions deploy process-transcription
 final class ModeProcessor {
 
     private let api = APIClient.shared
@@ -94,28 +71,24 @@ final class ModeProcessor {
             return text
         }
 
+        // Request body uses "transcript" (not "text") per Lovable edge function Zod schema
         struct RequestBody: Encodable {
-            let text: String
+            let transcript: String
             let mode: String
             let language: String
-            let systemPrompt: String
-
-            enum CodingKeys: String, CodingKey {
-                case text, mode, language
-                case systemPrompt = "system_prompt"
-            }
         }
 
+        // Response uses "transformed_text" (not "result") per Lovable edge function
         struct ResponseBody: Decodable {
-            let result: String?
+            let transformedText: String?
             let error: String?
+            // CodingKeys not needed — JSONDecoder.supabase uses convertFromSnakeCase
         }
 
         let body = RequestBody(
-            text: text,
+            transcript: text,
             mode: mode.rawValue,
-            language: language,
-            systemPrompt: mode.systemPrompt
+            language: language
         )
 
         let req = try api.request(
@@ -131,7 +104,7 @@ final class ModeProcessor {
             if let error = response.error {
                 throw ProcessingError.edgeFunctionError(error)
             }
-            guard let result = response.result, !result.isEmpty else {
+            guard let result = response.transformedText, !result.isEmpty else {
                 throw ProcessingError.emptyResult
             }
             return result

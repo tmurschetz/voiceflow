@@ -31,8 +31,8 @@
 		ABAC29EC7E73D3693B3CEE37 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA11DB729E224E2FB0C8FBFA /* LoginViewModel.swift */; };
 		BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */; };
 		C81E7932DD337171B42A703D /* RecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF41F43ECF611F7DF15B6D /* RecordingService.swift */; };
-		C89568B0B9C3E399AD914E03 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E1B0343837002D4D4E417A57 /* Sparkle */; };
 		D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */; };
+		D6A966006881517287550B2A /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1278BBE0DFB6124FCF67EED0 /* Config.swift */; };
 		DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986870957B3F79F64AE93655 /* SettingsService.swift */; };
 		EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */; };
 		EBD50C5D9B052E3A6D25C060 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C349A69E46B733CAA9C9174 /* AuthService.swift */; };
@@ -40,6 +40,8 @@
 
 /* Begin PBXFileReference section */
 		04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		0C747F1BF22B506D33DD7CF9 /* VoiceflowDesktop-adhoc.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "VoiceflowDesktop-adhoc.entitlements"; sourceTree = "<group>"; };
+		1278BBE0DFB6124FCF67EED0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelViewModel.swift; sourceTree = "<group>"; };
 		21831A47F2593DBBD10B3FD4 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		2C349A69E46B733CAA9C9174 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
@@ -75,7 +77,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				36F3E0BC45A7D6359355C01B /* KeyboardShortcuts in Frameworks */,
-				C89568B0B9C3E399AD914E03 /* Sparkle in Frameworks */,
 				267C9E58CC635208243DC33B /* CoreAudio.framework in Frameworks */,
 				81695A95F06F15DC159F53E0 /* AudioToolbox.framework in Frameworks */,
 				D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */,
@@ -144,6 +145,7 @@
 				9DD107E5A0A718640EEDB454 /* Features */,
 				87E1C4B7FFABCC9B8E95CA1A /* Network */,
 				A8A892FED312B3C49731C893 /* Permissions */,
+				A00938A9DA92AB1BB943CF54 /* Resources */,
 				843117B1EC89EFCFA5EB8463 /* Shortcuts */,
 			);
 			path = VoiceflowDesktop;
@@ -224,6 +226,14 @@
 			path = Features;
 			sourceTree = "<group>";
 		};
+		A00938A9DA92AB1BB943CF54 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0C747F1BF22B506D33DD7CF9 /* VoiceflowDesktop-adhoc.entitlements */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		A0235D5B545AFCB54D55CE2E /* Transcription */ = {
 			isa = PBXGroup;
 			children = (
@@ -268,6 +278,7 @@
 		CFD1A8EA7A0DE38AC2DFE626 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				1278BBE0DFB6124FCF67EED0 /* Config.swift */,
 				D20A5D08EE27C52FF980C3CB /* Auth */,
 				739260BE9C1108D1B9C338E0 /* Logging */,
 				0324C017D45034FF55213425 /* Output */,
@@ -304,7 +315,6 @@
 			name = VoiceflowDesktop;
 			packageProductDependencies = (
 				B6D686FB7744045773898F27 /* KeyboardShortcuts */,
-				E1B0343837002D4D4E417A57 /* Sparkle */,
 			);
 			productName = VoiceflowDesktop;
 			productReference = F9A38204F9282ADCE15BC018 /* VoiceflowDesktop.app */;
@@ -336,7 +346,6 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				AB7C04C06BC494B8F30F1BE9 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
-				1698416A6DD14341B47EA604 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1BE7453690BFCF9286A78B35 /* Products */;
@@ -358,6 +367,7 @@
 				BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */,
 				EBD50C5D9B052E3A6D25C060 /* AuthService.swift in Sources */,
 				4B2D36699AF1C9B22BBA917C /* BackendSchema.swift in Sources */,
+				D6A966006881517287550B2A /* Config.swift in Sources */,
 				5E3B1408BF7CFD8835AA61EB /* Endpoints.swift in Sources */,
 				8ABD82CEAEE96C5837C4105C /* LoginView.swift in Sources */,
 				ABAC29EC7E73D3693B3CEE37 /* LoginViewModel.swift in Sources */,
@@ -574,14 +584,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		1698416A6DD14341B47EA604 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
-			};
-		};
 		AB7C04C06BC494B8F30F1BE9 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
@@ -597,11 +599,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = AB7C04C06BC494B8F30F1BE9 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;
-		};
-		E1B0343837002D4D4E417A57 /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 1698416A6DD14341B47EA604 /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

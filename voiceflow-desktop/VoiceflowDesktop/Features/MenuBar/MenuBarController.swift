@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Delegate protocol so AppDelegate can respond to menu bar actions
 /// without MenuBarController needing to import AppDelegate.
+@MainActor
 protocol MenuBarControllerDelegate: AnyObject {
     func menuBarDidRequestSettings()
     func menuBarDidRequestSignOut()
@@ -21,6 +22,10 @@ final class MenuBarController {
     private var popover: NSPopover?
     private let statusPanelVM = StatusPanelViewModel()
     private weak var delegate: MenuBarControllerDelegate?
+
+    // MARK: - Recording blink animation
+    private var blinkTimer: Timer?
+    private var blinkPhase = true
 
     // MARK: - Init
 
@@ -72,6 +77,44 @@ final class MenuBarController {
         if let profile  { statusPanelVM.profile  = profile  }
         if let settings { statusPanelVM.settings = settings }
         updateIcon(for: state)
+
+        // Start/stop blink animation based on state
+        if case .recording = state {
+            startBlinking()
+        } else {
+            stopBlinking()
+        }
+
+        // Reset recording timer when leaving recording state
+        if case .recording = state { /* keep counting */ } else {
+            statusPanelVM.recordingSeconds = 0
+        }
+    }
+
+    /// Called every second while recording to update the live timer.
+    func incrementRecordingSeconds() {
+        statusPanelVM.recordingSeconds += 1
+    }
+
+    // MARK: - Blink animation
+
+    private func startBlinking() {
+        guard blinkTimer == nil else { return }
+        blinkPhase = true
+        blinkTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            // Timer fires on main thread — re-enter main actor isolation explicitly.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.blinkPhase.toggle()
+                self.statusItem?.button?.alphaValue = self.blinkPhase ? 1.0 : 0.3
+            }
+        }
+    }
+
+    private func stopBlinking() {
+        blinkTimer?.invalidate()
+        blinkTimer = nil
+        statusItem?.button?.alphaValue = 1.0
     }
 
     private func updateIcon(for state: AppState) {
@@ -92,7 +135,7 @@ final class MenuBarController {
                                    accessibilityDescription: "Voiceflow — Processing")
             button.image?.isTemplate = true
             button.contentTintColor = nil
-        case .success:
+        case .success, .successWithClipboard:
             button.image = NSImage(systemSymbolName: "checkmark.circle.fill",
                                    accessibilityDescription: "Voiceflow — Done")
             button.image?.isTemplate = false

@@ -104,7 +104,7 @@ final class SettingsService: ObservableObject {
         try await api.perform(req)
     }
 
-    // MARK: - POST (insert new row — first-time users)
+    // MARK: - POST/upsert (insert or update — safe even if row already exists)
 
     private func insertSettings(_ settings: AppSettings, session: SupabaseSession) async throws {
         let body = SettingsInsertBody(from: settings, userID: session.user.id)
@@ -113,7 +113,9 @@ final class SettingsService: ObservableObject {
             method: "POST",
             body: body,
             authToken: session.accessToken,
-            extraHeaders: ["Prefer": "return=minimal"]
+            // resolution=merge-duplicates → upsert: INSERT if absent, UPDATE if present.
+            // Prevents HTTP 409 (unique_violation) when a row already exists.
+            extraHeaders: ["Prefer": "resolution=merge-duplicates,return=minimal"]
         )
         try await api.perform(req)
     }
@@ -136,35 +138,24 @@ final class SettingsService: ObservableObject {
 // MARK: - DB Row types
 
 /// Used when reading a settings row from Supabase (includes id, created_at, etc.)
+///
+/// No explicit CodingKeys — JSONDecoder.supabase uses convertFromSnakeCase which
+/// maps "user_id" → userId, "shortcut_private" → shortcutPrivate, etc. automatically.
+/// Mixing explicit snake_case CodingKeys with convertFromSnakeCase breaks decoding.
 private struct SettingsRow: Decodable {
     var id: UUID?
-    var userId: UUID
+    var userId: UUID?               // optional so a partial row doesn't crash decoding
     var shortcutPrivate: String?
     var shortcutBusiness: String?
     var shortcutCalm: String?
     var autoDetectLanguage: Bool?
     var manualLanguageOverride: String?
     var outputMode: String?
-    var microphoneDevice: String?      // column name: microphone_device
+    var microphoneDevice: String?
     var autoInsert: Bool?
     var defaultLanguage: String?
     var defaultMode: String?
-    // created_at, updated_at intentionally ignored
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case userId                 = "user_id"
-        case shortcutPrivate        = "shortcut_private"
-        case shortcutBusiness       = "shortcut_business"
-        case shortcutCalm           = "shortcut_calm"
-        case autoDetectLanguage     = "auto_detect_language"
-        case manualLanguageOverride = "manual_language_override"
-        case outputMode             = "output_mode"
-        case microphoneDevice       = "microphone_device"
-        case autoInsert             = "auto_insert"
-        case defaultLanguage        = "default_language"
-        case defaultMode            = "default_mode"
-    }
+    // createdAt, updatedAt intentionally ignored (not in select)
 
     func toAppSettings() -> AppSettings {
         var s = AppSettings()

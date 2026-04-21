@@ -217,7 +217,10 @@ final class RecordingService {
                     &size,
                     &translation
                 )
-                return status == noErr && deviceID != kAudioObjectUnknown
+                // Read through outputPtr to avoid an exclusivity violation:
+                // `deviceID` is mutably borrowed for the duration of this closure,
+                // so we must not also read it directly.
+                return status == noErr && outputPtr.pointee != kAudioObjectUnknown
             }
         }
         return found ? deviceID : nil
@@ -229,8 +232,16 @@ final class RecordingService {
     /// Used to populate the microphone picker in Settings.
     /// The `id` field maps to `user_settings.microphone_device`.
     static func availableInputDevices() -> [(id: String, name: String)] {
+        // .microphone and .external were introduced in macOS 14 (Sonoma).
+        // On macOS 13 (Ventura) we use the legacy .builtInMicrophone type.
+        let deviceTypes: [AVCaptureDevice.DeviceType]
+        if #available(macOS 14.0, *) {
+            deviceTypes = [.microphone, .external]
+        } else {
+            deviceTypes = [.builtInMicrophone]
+        }
         let session = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.microphone, .external],
+            deviceTypes: deviceTypes,
             mediaType: .audio,
             position: .unspecified
         )
