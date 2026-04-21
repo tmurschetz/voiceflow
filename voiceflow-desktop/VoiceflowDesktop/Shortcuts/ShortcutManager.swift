@@ -33,13 +33,30 @@ final class ShortcutManager {
     // MARK: - Registration
 
     /// Bind the mode handler and activate all three shortcuts.
-    /// Call after loading settings on startup, and again after the user saves settings.
+    /// Called once at startup from AppDelegate. The KeyboardShortcuts framework
+    /// persists the actual key combos in UserDefaults via KeyboardShortcuts.Recorder —
+    /// we must NOT call reset() here as that would wipe those persisted bindings.
     func register(settings: AppSettings, handler: @escaping (ProcessingMode) -> Void) {
         self.handler = handler
-        unregisterAll()
+        attachHandlers()
+    }
 
-        // Bind handlers — KeyboardShortcuts uses its own UserDefaults persistence
-        // for the actual key combo. The DB strings are used for display only.
+    /// Re-attach handlers to the currently persisted key bindings.
+    /// Call after settings are saved so the handler stays live.
+    /// Does NOT touch key bindings — the Recorder already persisted them in UserDefaults.
+    func reattachHandlers() {
+        attachHandlers()
+    }
+
+    /// Removes key bindings AND handlers — call only on sign-out.
+    func unregisterAll() {
+        KeyboardShortcuts.reset(.dictatePrivate, .dictateBusiness, .dictateCalm)
+        handler = nil
+    }
+
+    // MARK: - Private
+
+    private func attachHandlers() {
         KeyboardShortcuts.onKeyDown(for: .dictatePrivate) { [weak self] in
             self?.handler?(.private)
         }
@@ -49,10 +66,6 @@ final class ShortcutManager {
         KeyboardShortcuts.onKeyDown(for: .dictateCalm) { [weak self] in
             self?.handler?(.calm)
         }
-    }
-
-    func unregisterAll() {
-        KeyboardShortcuts.reset(.dictatePrivate, .dictateBusiness, .dictateCalm)
     }
 
     // MARK: - Current Combo Strings (for saving to DB)

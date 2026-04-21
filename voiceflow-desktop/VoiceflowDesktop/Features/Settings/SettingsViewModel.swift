@@ -44,11 +44,11 @@ final class SettingsViewModel: ObservableObject {
             try await settingsService.saveSettings(draft, session: session)
             saveSuccess = true
 
-            // Re-register global shortcuts with the updated bindings.
-            // Note: AppDelegate's handler is replaced here; this is safe because
-            // the handler is stateless (it just calls handleShortcutTriggered on
-            // the delegate, not a closure that captures local state).
-            ShortcutManager.shared.register(settings: draft) { _ in }
+            // Re-attach shortcut handlers after save.
+            // The Recorder already persisted the key bindings in UserDefaults;
+            // we only need to ensure onKeyDown handlers are still wired to the
+            // AppDelegate pipeline (register() stored the handler at startup).
+            ShortcutManager.shared.reattachHandlers()
         } catch {
             saveError = error.localizedDescription
         }
