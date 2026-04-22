@@ -212,6 +212,9 @@ private struct MicrophoneSection: View {
 private struct PermissionsSection: View {
     @State private var hasMic = false
     @State private var hasAX  = false
+    /// Polls permission status every 2 s while Settings is open so the UI
+    /// reflects grants made in System Settings without reopening the window.
+    @State private var pollTimer: Timer? = nil
 
     var body: some View {
         SectionHeader(
@@ -236,9 +239,22 @@ private struct PermissionsSection: View {
             )
         }
         .onAppear {
-            hasMic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-            hasAX  = AXIsProcessTrusted()
+            refreshStatus()
+            // Poll every 2 s — lets the status flip to ✅ as soon as the user
+            // grants permission in System Settings and switches back here.
+            pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+                refreshStatus()
+            }
         }
+        .onDisappear {
+            pollTimer?.invalidate()
+            pollTimer = nil
+        }
+    }
+
+    private func refreshStatus() {
+        hasMic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        hasAX  = AXIsProcessTrusted()
     }
 }
 

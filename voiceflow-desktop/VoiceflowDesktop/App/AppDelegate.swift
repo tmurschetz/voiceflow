@@ -41,7 +41,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         menuBarController = MenuBarController(delegate: self)
+        resetAXPromptIfNewBuild()
         Task { await performStartupChecks() }
+    }
+
+    /// Resets the "Accessibility already prompted" flag whenever a new binary is installed.
+    /// Uses the executable's modification date as a build fingerprint — it changes on
+    /// every `make install` even when the version number stays the same.
+    /// This ensures the Accessibility prompt appears exactly once per build, so
+    /// re-installs don't silently revoke Accessibility without notifying the user.
+    private func resetAXPromptIfNewBuild() {
+        let buildKey = "com.voiceflow.desktop.last_binary_date"
+        guard let execURL = Bundle.main.executableURL,
+              let attrs = try? FileManager.default.attributesOfItem(atPath: execURL.path),
+              let modDate = attrs[.modificationDate] as? Date else { return }
+        let fingerprint = String(modDate.timeIntervalSince1970)
+        let lastFingerprint = UserDefaults.standard.string(forKey: buildKey) ?? ""
+        if fingerprint != lastFingerprint {
+            UserDefaults.standard.set(fingerprint, forKey: buildKey)
+            permissionsManager.resetAccessibilityPromptFlag()
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
