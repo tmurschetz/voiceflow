@@ -127,9 +127,9 @@ private struct LanguageSection: View {
     @Binding var draft: AppSettings
 
     var body: some View {
-        SectionHeader(title: "Language", subtitle: "Auto-detect works well for German and English.")
+        SectionHeader(title: "Sprache", subtitle: "Auto-detect erkennt Deutsch, Schweizerdeutsch und Englisch automatisch.")
 
-        Toggle("Auto-detect language", isOn: $draft.autoDetectLanguage)
+        Toggle("Sprache automatisch erkennen", isOn: $draft.autoDetectLanguage)
 
         if !draft.autoDetectLanguage {
             Picker("Language", selection: $draft.manualLanguageOverride) {

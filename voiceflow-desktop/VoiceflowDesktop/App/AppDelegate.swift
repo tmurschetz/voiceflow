@@ -127,6 +127,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if recordingService.isRecording {
             // Second press: stop → transcribe → process → output → log
+            // Capture the frontmost app PID NOW — before any async work —
+            // so the paste keystroke targets the correct app even after
+            // several seconds of Whisper + Gemini processing.
+            let targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
             let startedAt = recordingService.recordingStartedAt ?? Date()
             let audioSeconds = Int(recordingService.currentDurationSeconds)
             var audio: RecordedAudio?
@@ -154,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
 
                 // Output — returns true if clipboard was used instead of AX insertion
-                let usedClipboard = try await outputService.output(text: processed, mode: outputMode)
+                let usedClipboard = try await outputService.output(text: processed, mode: outputMode, targetPID: targetPID)
 
                 // Log success
                 await sessionLogger.logCompleted(

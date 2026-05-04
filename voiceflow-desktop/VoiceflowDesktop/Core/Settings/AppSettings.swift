@@ -87,9 +87,9 @@ enum SupportedLanguage: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .german:      return "German"
-        case .english:     return "English"
-        case .swissGerman: return "Swiss German"
+        case .german:      return "Schweizer Hochdeutsch"
+        case .english:     return "Englisch"
+        case .swissGerman: return "Schweizerdeutsch (Dialekt)"
         }
     }
 
