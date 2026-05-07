@@ -101,11 +101,16 @@ final class ModeProcessor {
                 )
                 return Result(text: polished, usedFallback: false)
 
-            } catch let apiError as APIError {
-                if Self.isRetryable(apiError), attempt < Self.maxAttempts {
-                    NSLog("[ModeProcessor] Attempt %d failed (%@), retrying in %ds…",
-                          attempt, String(describing: apiError), Self.retryDelaySeconds)
-                    // Visible countdown — fire one tick per second
+            } catch {
+                // Catch *all* errors so URLSession-level failures (timeouts,
+                // connection refused, DNS, etc.) flow through the same retry
+                // logic as APIError. Previously these were thrown as URLError
+                // and bypassed retry entirely → user lost their recording.
+                let retryable = Self.isRetryable(error)
+                NSLog("[ModeProcessor] Attempt %d failed: %@ (retryable=%@)",
+                      attempt, String(describing: error), retryable ? "YES" : "NO")
+
+                if retryable, attempt < Self.maxAttempts {
                     if let onRetry {
                         for sec in stride(from: Self.retryDelaySeconds, through: 1, by: -1) {
                             await onRetry(.willRetryIn(seconds: sec, attempt: attempt, total: Self.maxAttempts))
@@ -115,17 +120,23 @@ final class ModeProcessor {
                     } else {
                         try? await Task.sleep(nanoseconds: UInt64(Self.retryDelaySeconds) * 1_000_000_000)
                     }
-                    lastError = apiError
+                    lastError = error
                     continue
                 }
-                if Self.isRetryable(apiError) {
-                    // Retries exhausted on a transient/availability error — fall back.
-                    NSLog("[ModeProcessor] All %d attempts failed (%@). Returning raw transcript.",
-                          Self.maxAttempts, String(describing: apiError))
+                if retryable {
+                    // Retries exhausted on a transient/availability error — fall
+                    // back to the raw Whisper transcript so the user keeps their words.
+                    NSLog("[ModeProcessor] All %d attempts failed. Returning raw transcript.",
+                          Self.maxAttempts)
                     return Result(text: text, usedFallback: true)
                 }
-                // Non-retryable API error — surface it.
-                throw ProcessingError.networkError(apiError)
+                // Non-retryable error (auth, malformed body, …). Surface a
+                // user-friendly error — but the audio file lives on disk for now,
+                // so callers can still recover the raw text if they want.
+                if let apiError = error as? APIError {
+                    throw ProcessingError.networkError(apiError)
+                }
+                throw error
             }
         }
 
@@ -174,18 +185,40 @@ final class ModeProcessor {
         return result
     }
 
-    /// Decide whether an API error warrants a retry + raw-transcript fallback.
-    /// 5xx + 404 + decoding failures are transient or "service issue"; everything
-    /// else (auth, malformed request) should propagate immediately.
-    private static func isRetryable(_ error: APIError) -> Bool {
-        switch error {
-        case .httpError(let code, _) where code == 404 || (500..<600).contains(code):
-            return true
-        case .invalidResponse, .decodingError:
-            return true
-        default:
-            return false
+    /// Decide whether an error warrants a retry + raw-transcript fallback.
+    /// Covers both `APIError` (HTTP-level) and `URLError` (transport-level —
+    /// timeouts, DNS, connection refused). Auth/4xx errors are NOT retried since
+    /// they indicate a real bug or expired credentials.
+    private static func isRetryable(_ error: Error) -> Bool {
+        if let apiError = error as? APIError {
+            switch apiError {
+            case .httpError(let code, _) where code == 404 || (500..<600).contains(code):
+                return true
+            case .invalidResponse, .decodingError:
+                return true
+            default:
+                return false
+            }
         }
+        if let urlError = error as? URLError {
+            // Transport-level failures — almost always worth retrying.
+            switch urlError.code {
+            case .timedOut, .cannotFindHost, .cannotConnectToHost,
+                 .networkConnectionLost, .notConnectedToInternet,
+                 .dnsLookupFailed, .resourceUnavailable, .badServerResponse,
+                 .secureConnectionFailed, .serverCertificateUntrusted,
+                 .cannotLoadFromNetwork, .dataNotAllowed, .internationalRoamingOff:
+                return true
+            default:
+                return false
+            }
+        }
+        // ProcessingError.edgeFunctionError — server returned `{"error": "..."}`.
+        // Often a transient Gemini/LLM issue; retry once.
+        if let _ = error as? ProcessingError {
+            return true
+        }
+        return false
     }
 
     // MARK: - Legacy overload (keeps unit tests / older callers compatible)

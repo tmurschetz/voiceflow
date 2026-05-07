@@ -9,12 +9,17 @@ struct StatusPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header — shows app name + logged-in user
+            // Header — shows app name + logged-in user + build version
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Voiceflow")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        Text("Voiceflow")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(AppInfo.displayString)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                     if let name = viewModel.profile?.displayName {
                         Text(name)
                             .font(.caption)

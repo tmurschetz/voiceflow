@@ -50,6 +50,11 @@ struct SettingsView: View {
                         .foregroundStyle(.red)
                         .font(.caption)
                         .lineLimit(2)
+                } else {
+                    Text("Voiceflow \(AppInfo.displayString)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .help("Build identifier — include this in bug reports.")
                 }
                 Spacer()
                 Button("Reset to Defaults") { viewModel.resetToDefaults() }
