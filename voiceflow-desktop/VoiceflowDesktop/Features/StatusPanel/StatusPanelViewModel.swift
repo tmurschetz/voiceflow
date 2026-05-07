@@ -38,9 +38,15 @@ enum AppState: Equatable {
     case idle
     case recording(mode: ProcessingMode)
     case processing
+    /// Server returned a transient error; we'll auto-retry shortly.
+    /// `secondsRemaining` ticks down once per second so the UI can show a countdown.
+    case retrying(attempt: Int, total: Int, secondsRemaining: Int)
     case success
     /// Dictation succeeded but text was delivered via clipboard (AX insertion unavailable).
     case successWithClipboard
+    /// AI polish step was skipped (server unavailable after retries) — the raw
+    /// Whisper transcript was inserted as a fallback so no audio is lost.
+    case successWithRawFallback
     case error(String)
     case blocked(BlockedReason)
 
@@ -49,8 +55,11 @@ enum AppState: Equatable {
         case .idle:                 return "Ready"
         case .recording(let mode): return "Recording — \(mode.displayName)"
         case .processing:          return "Processing…"
+        case .retrying(let a, let t, let s):
+            return "Retrying \(a)/\(t) in \(s)s…"
         case .success:             return "Done"
         case .successWithClipboard: return "Pasted from clipboard"
+        case .successWithRawFallback: return "Pasted raw text (server unavailable)"
         case .error(let msg):      return "Error: \(msg)"
         case .blocked(let reason): return reason.title
         }
@@ -61,8 +70,10 @@ enum AppState: Equatable {
         case .idle:                 return .secondary
         case .recording:            return .red
         case .processing:           return .orange
+        case .retrying:             return .orange
         case .success:              return .green
         case .successWithClipboard: return .green
+        case .successWithRawFallback: return .yellow
         case .error:                return .red
         case .blocked:              return .orange
         }
@@ -73,8 +84,10 @@ enum AppState: Equatable {
         case .idle:                 return "waveform"
         case .recording:            return "record.circle.fill"
         case .processing:           return "ellipsis.circle"
+        case .retrying:             return "arrow.clockwise.circle"
         case .success:              return "checkmark.circle.fill"
         case .successWithClipboard: return "doc.on.clipboard.fill"
+        case .successWithRawFallback: return "exclamationmark.bubble.fill"
         case .error:                return "exclamationmark.triangle.fill"
         case .blocked:              return "lock.circle.fill"
         }
@@ -85,8 +98,11 @@ enum AppState: Equatable {
         case (.idle, .idle):                             return true
         case (.recording(let a), .recording(let b)):     return a == b
         case (.processing, .processing):                 return true
+        case (.retrying(let a1, let t1, let s1), .retrying(let a2, let t2, let s2)):
+                                                         return a1 == a2 && t1 == t2 && s1 == s2
         case (.success, .success):                       return true
         case (.successWithClipboard, .successWithClipboard): return true
+        case (.successWithRawFallback, .successWithRawFallback): return true
         case (.error(let a), .error(let b)):             return a == b
         case (.blocked(let a), .blocked(let b)):         return a == b
         default:                                         return false

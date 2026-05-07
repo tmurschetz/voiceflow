@@ -14,7 +14,7 @@ VERSION  = 0.1.0
 
 .PHONY: generate open dev build clean \
         build-release dmg install \
-        deps help
+        deps help icon release-notes
 
 # ─── Developer workflow ───────────────────────────────────────────────────────
 
@@ -46,6 +46,19 @@ clean:
 	rm -rf $(BUILD) $(DMG)
 	rm -rf ~/Library/Developer/Xcode/DerivedData/VoiceflowDesktop-*
 	rm -rf $(PROJECT)
+
+## Build AppIcon.icns + monochrome MenuBarIcon.png set from AppIcon.png at repo root.
+##   Drop a 1024×1024 PNG named AppIcon.png at the repo root, then run `make icon`.
+icon:
+	@scripts/make-icon.sh
+	@python3 scripts/menubar-icon.py
+
+## Update CHANGELOG.md from git history.
+##   make release-notes                  → append commits since last tag to [Unreleased]
+##   make release-notes RELEASE=0.3.0    → roll [Unreleased] into [0.3.0] dated today
+##   make release-notes RELEASE=0.3.0 TAG=1 → also create git tag v0.3.0
+release-notes:
+	@scripts/release-notes.sh "$(RELEASE)" $(if $(TAG),--tag,)
 
 ## SPM packages are resolved by Xcode on first open
 deps:
@@ -113,6 +126,21 @@ build-release: generate
 	@# ── Step 4: copy the assembled .app to our well-known output path ────────
 	@rm -rf "$(APP)"
 	@cp -R "$(BUILD)/DerivedData/Build/Products/Release/$(APP_NAME).app" "$(APP)"
+	@# ── Step 4b: ensure AppIcon.icns is present in Resources ────────────────
+	@# XcodeGen bundles it via the resources rule, but we belt-and-braces copy
+	@# in case the .icns was rebuilt after project generation.
+	@if [ -f VoiceflowDesktop/Resources/AppIcon.icns ]; then \
+	    cp VoiceflowDesktop/Resources/AppIcon.icns "$(APP)/Contents/Resources/AppIcon.icns"; \
+	    echo "   ✓ AppIcon.icns copied"; \
+	  else \
+	    echo "   ⚠ No AppIcon.icns yet — drop AppIcon.png at repo root and run 'make icon'"; \
+	  fi
+	@for f in MenuBarIcon.png MenuBarIcon@2x.png MenuBarIcon@3x.png; do \
+	    if [ -f "VoiceflowDesktop/Resources/$$f" ]; then \
+	        cp "VoiceflowDesktop/Resources/$$f" "$(APP)/Contents/Resources/$$f"; \
+	    fi; \
+	  done
+	@echo "   ✓ MenuBarIcon variants copied"
 	@# ── Step 5: re-sign inside-out with ad-hoc + entitlements ────────────────
 	@# macOS 14+ Hardened Runtime enforces library-validation: all loaded
 	@# frameworks must share the main executable's Team ID.  Sparkle ships
@@ -171,6 +199,9 @@ help:
 	@echo "  make build         Quick Debug build (no signing)"
 	@echo "  make clean         Remove all build artefacts"
 	@echo ""
+	@echo "  make icon          Build AppIcon.icns + monochrome MenuBarIcon set"
+	@echo "  make release-notes Append commits since last tag to CHANGELOG.md"
+	@echo "                     (RELEASE=x.y.z to roll [Unreleased] → [x.y.z])"
 	@echo "  make build-release Build signed Release .app"
 	@echo "  make dmg           Build + package as Voiceflow-beta.dmg"
 	@echo "  make install       Build + install to /Applications + launch"

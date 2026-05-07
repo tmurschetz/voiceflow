@@ -139,23 +139,41 @@ final class OutputService {
     ///   several seconds, during which the user may have briefly lost or changed focus.
     ///   Falls back to `.cgAnnotatedSessionEventTap` (frontmost app) when nil.
     private func simulatePasteKeystroke(targetPID: pid_t?) {
+        // Diagnostic snapshot at call time
+        let axTrusted = AXIsProcessTrusted()
+        let frontmostNow = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
+        NSLog("[VF-Paste] called. targetPID=%d frontmostNow=%d axTrusted=%@",
+              Int(targetPID ?? -1), Int(frontmostNow), axTrusted ? "YES" : "NO")
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            // Re-activate the original target app so the keystroke lands there.
+            // This is essential when our menu bar app's status panel briefly
+            // stole focus, or when another app became frontmost during processing.
+            if let pid = targetPID, pid > 0,
+               let target = NSRunningApplication(processIdentifier: pid) {
+                let activated = target.activate()
+                NSLog("[VF-Paste] activate(target=%d) -> %@", Int(pid), activated ? "YES" : "NO")
+            }
+
             let source = CGEventSource(stateID: .hidSystemState)
             guard
                 let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
                 let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
-            else { return }
+            else {
+                NSLog("[VF-Paste] CGEvent creation FAILED")
+                return
+            }
             keyDown.flags = .maskCommand
             keyUp.flags   = .maskCommand
             if let pid = targetPID, pid > 0 {
-                // Target the specific app that triggered the shortcut — reliable even
-                // after seconds of async processing changed focus temporarily.
+                // Deliver directly to the captured app's process.
                 keyDown.postToPid(pid)
                 keyUp.postToPid(pid)
+                NSLog("[VF-Paste] posted ⌘V to pid=%d", Int(pid))
             } else {
-                // Fallback: deliver to whoever is frontmost right now.
                 keyDown.post(tap: .cgAnnotatedSessionEventTap)
                 keyUp.post(tap: .cgAnnotatedSessionEventTap)
+                NSLog("[VF-Paste] posted ⌘V to event tap (no pid)")
             }
         }
     }

@@ -37,8 +37,20 @@ targets:
         excludes:
           - Resources/Info.plist
           - Resources/VoiceflowDesktop.entitlements
+          - Resources/AppIcon.icns
+          - Resources/MenuBarIcon.png
+          - Resources/MenuBarIcon@2x.png
+          - Resources/MenuBarIcon@3x.png
     resources:
       - VoiceflowDesktop/Resources/Info.plist
+      - path: VoiceflowDesktop/Resources/AppIcon.icns
+        optional: true
+      - path: VoiceflowDesktop/Resources/MenuBarIcon.png
+        optional: true
+      - path: VoiceflowDesktop/Resources/MenuBarIcon@2x.png
+        optional: true
+      - path: VoiceflowDesktop/Resources/MenuBarIcon@3x.png
+        optional: true
     dependencies:
       - package: KeyboardShortcuts
       - sdk: CoreAudio.framework    # AudioDeviceID, AudioObjectGetPropertyData

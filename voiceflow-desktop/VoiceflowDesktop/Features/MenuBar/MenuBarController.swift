@@ -40,12 +40,27 @@ final class MenuBarController {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         guard let button = statusItem?.button else { return }
-        button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Voiceflow")
-        button.image?.isTemplate = true
+        button.image = Self.brandIdleImage()
         // Receive both left- and right-mouse-up so we can differentiate them
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.action = #selector(statusButtonClicked(_:))
         button.target = self
+    }
+
+    /// The "idle" / branding image for the menu bar — a monochrome V-with-wave
+    /// extracted from AppIcon.png. Falls back to the SF Symbol `waveform` if the
+    /// bundled template image is missing (e.g. before `make icon` has run).
+    private static func brandIdleImage() -> NSImage? {
+        if let img = NSImage(named: "MenuBarIcon") {
+            img.isTemplate = true
+            // Constrain to a tidy menu-bar size so the template renders crisply
+            // regardless of the source PNG resolution.
+            img.size = NSSize(width: 18, height: 18)
+            return img
+        }
+        let fallback = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Voiceflow")
+        fallback?.isTemplate = true
+        return fallback
     }
 
     // MARK: - Popover
@@ -121,9 +136,7 @@ final class MenuBarController {
         guard let button = statusItem?.button else { return }
         switch state {
         case .idle:
-            button.image = NSImage(systemSymbolName: "waveform",
-                                   accessibilityDescription: "Voiceflow — Idle")
-            button.image?.isTemplate = true
+            button.image = Self.brandIdleImage()
             button.contentTintColor = nil
         case .recording:
             button.image = NSImage(systemSymbolName: "record.circle.fill",
@@ -135,11 +148,21 @@ final class MenuBarController {
                                    accessibilityDescription: "Voiceflow — Processing")
             button.image?.isTemplate = true
             button.contentTintColor = nil
+        case .retrying:
+            button.image = NSImage(systemSymbolName: "arrow.clockwise.circle",
+                                   accessibilityDescription: "Voiceflow — Retrying")
+            button.image?.isTemplate = false
+            button.contentTintColor = .systemOrange
         case .success, .successWithClipboard:
             button.image = NSImage(systemSymbolName: "checkmark.circle.fill",
                                    accessibilityDescription: "Voiceflow — Done")
             button.image?.isTemplate = false
             button.contentTintColor = .systemGreen
+        case .successWithRawFallback:
+            button.image = NSImage(systemSymbolName: "exclamationmark.bubble.fill",
+                                   accessibilityDescription: "Voiceflow — Server unavailable, raw text")
+            button.image?.isTemplate = false
+            button.contentTintColor = .systemYellow
         case .error:
             button.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill",
                                    accessibilityDescription: "Voiceflow — Error")

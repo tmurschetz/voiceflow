@@ -19,6 +19,12 @@
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
 
+    <!-- App icon: matches Resources/AppIcon.icns (built by scripts/make-icon.sh) -->
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+
     <!-- Hide from Dock, run as menu bar utility -->
     <key>LSUIElement</key>
     <true/>

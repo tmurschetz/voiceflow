@@ -55,7 +55,7 @@ final class APIClient {
         }
 
         if let body = body {
-            req.httpBody = try JSONEncoder().encode(body)
+            req.httpBody = try JSONEncoder.supabase.encode(body)
         }
 
         return req
@@ -84,6 +84,11 @@ final class APIClient {
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
+            // Diagnostic: log every non-2xx response so we can see what the server rejected.
+            NSLog("[VF-API] HTTP %d url=%@ body=%@",
+                  http.statusCode,
+                  http.url?.absoluteString ?? "?",
+                  body)
             throw APIError.httpError(statusCode: http.statusCode, body: body)
         }
     }
@@ -105,6 +110,28 @@ enum APIError: LocalizedError {
         case .decodingError(let e): return "Decoding error: \(e.localizedDescription)"
         }
     }
+}
+
+// MARK: - JSONEncoder
+
+extension JSONEncoder {
+    /// Shared encoder configured for Supabase requests:
+    ///   - `Date` → ISO 8601 with fractional seconds (PostgREST `timestamptz` requires a string,
+    ///     not a numeric. Without this, `started_at`/`finished_at` fields are encoded as Swift
+    ///     reference-date doubles like 799835420.913518 and rejected with HTTP 400
+    ///     "invalid input syntax for type timestamp with time zone".)
+    ///   - Field names use explicit `CodingKeys` per model (we do NOT rely on convertToSnakeCase
+    ///     because some models mix snake_case and camelCase keys).
+    static let supabase: JSONEncoder = {
+        let e = JSONEncoder()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        e.dateEncodingStrategy = .custom { date, encoder in
+            var c = encoder.singleValueContainer()
+            try c.encode(formatter.string(from: date))
+        }
+        return e
+    }()
 }
 
 // MARK: - JSONDecoder

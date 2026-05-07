@@ -85,6 +85,10 @@ final class TranscriptionService {
         }
         guard http.statusCode == 200 else {
             let msg = String(data: data, encoding: .utf8) ?? "Unknown error"
+            // Diagnostic: surface the exact failure to the unified log, even in Release builds.
+            NSLog("[VF-Whisper] HTTP %d body=%@", http.statusCode, msg)
+            NSLog("[VF-Whisper] request URL=%@ method=%@ contentLength=%d",
+                  req.url?.absoluteString ?? "?", req.httpMethod ?? "?", body.count)
             throw TranscriptionError.apiError(http.statusCode, msg)
         }
 

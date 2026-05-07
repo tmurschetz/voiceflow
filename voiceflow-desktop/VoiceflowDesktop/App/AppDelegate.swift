@@ -149,18 +149,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     session: session
                 )
 
-                // Mode processing (passes detected locale for context)
-                let processed = try await modeProcessor.process(
+                // Mode processing — auto-retries transient 5xx and falls back to
+                // raw transcript so the user never loses 2 minutes of dictation.
+                let processingResult = try await modeProcessor.process(
                     text: transcriptionResult.transcript,
                     mode: mode,
                     language: transcriptionResult.usedLocale,
-                    session: session
+                    session: session,
+                    onRetry: { [weak self] event in
+                        switch event {
+                        case .willRetryIn(let sec, let attempt, let total):
+                            self?.menuBarController?.update(
+                                state: .retrying(attempt: attempt, total: total, secondsRemaining: sec),
+                                profile: nil, settings: nil)
+                        case .retrying:
+                            self?.menuBarController?.update(state: .processing,
+                                                            profile: nil, settings: nil)
+                        }
+                    }
                 )
+                let processed = processingResult.text
+                let usedFallback = processingResult.usedFallback
 
                 // Output — returns true if clipboard was used instead of AX insertion
                 let usedClipboard = try await outputService.output(text: processed, mode: outputMode, targetPID: targetPID)
 
-                // Log success
+                // Log success (mark fallback in error_message so we can audit later)
                 await sessionLogger.logCompleted(
                     session: session,
                     mode: mode,
@@ -172,12 +186,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     audioSeconds: audioSeconds
                 )
 
-                // Show clipboard indicator if direct insertion was unavailable
-                let successState: AppState = (usedClipboard && outputMode == .insertIntoField)
-                    ? .successWithClipboard
-                    : .success
+                // Pick the most informative success state for the user
+                let successState: AppState
+                if usedFallback {
+                    successState = .successWithRawFallback
+                } else if usedClipboard && outputMode == .insertIntoField {
+                    successState = .successWithClipboard
+                } else {
+                    successState = .success
+                }
                 await updateMenuBarState(successState)
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                // Linger longer on the fallback message so the user notices it
+                let dwellNanos: UInt64 = usedFallback ? 4_000_000_000 : 2_000_000_000
+                try? await Task.sleep(nanoseconds: dwellNanos)
                 await updateMenuBarState(.idle)
 
             } catch {
