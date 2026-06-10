@@ -9,34 +9,29 @@
 /* Begin PBXBuildFile section */
 		0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */; };
 		08F8F8268F17A6BB579C29A4 /* ShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4AE4459614E88846D38FC3E /* ShortcutManager.swift */; };
-		12652588690EFA5ABAE0B534 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21831A47F2593DBBD10B3FD4 /* APIClient.swift */; };
 		25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D890CA6F7B69B61E3FEB566E /* StatusPanelView.swift */; };
 		267C9E58CC635208243DC33B /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5FA3A581A678762801BEF8A /* CoreAudio.framework */; };
 		36F3E0BC45A7D6359355C01B /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = B6D686FB7744045773898F27 /* KeyboardShortcuts */; };
 		3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79A466290CA8761E783FAE /* ModeProcessor.swift */; };
+		3FA7FB275C280983C9C22AA2 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3859001B87688555C43F1897 /* OnboardingView.swift */; };
 		4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C203490056D9249E43F16113 /* SettingsView.swift */; };
-		4B2D36699AF1C9B22BBA917C /* BackendSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D8F3F8DF189109B88D74050 /* BackendSchema.swift */; };
 		4D4F01FC9ACA55E62478A8A9 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7563138D9880266FA772ECF /* AppInfo.swift */; };
-		5E3B1408BF7CFD8835AA61EB /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3013249724B3FF7C396E8E3 /* Endpoints.swift */; };
 		5ECE84548F90AFA7E7C65828 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A9F2E671A9B5B1A61F6F7B /* PermissionsManager.swift */; };
 		64EBA98BCC8FD1F558D860C5 /* VoiceflowDesktopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */; };
-		6906F422E38BE0A36864BC7D /* TranscriptionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A3F57B73BF470CEB470FC63 /* TranscriptionSession.swift */; };
-		7101E950FEC9D27E32BD6710 /* SessionLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECCE6D26FD76B0B2EFFDEC84 /* SessionLogger.swift */; };
+		71E1D703CE2BABDD76AA419A /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 768F27D8149E7D8144BAD286 /* HistoryStore.swift */; };
 		80681A89C12E9E70ADD966D2 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D263E9D2AEE6F1A5E6B3B6D7 /* SettingsViewModel.swift */; };
 		81695A95F06F15DC159F53E0 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0C8A93DE5C2E1C773207B17 /* AudioToolbox.framework */; };
-		8ABD82CEAEE96C5837C4105C /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F5320484F62C23BB51591FA /* LoginView.swift */; };
 		9625DE809DF647E41737ED3F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1019C2601FF3C184A5A05C /* AppDelegate.swift */; };
 		9BF714C42461818F5C317E3F /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F3DF5D8238CBCF9FFA3DC7 /* MenuBarController.swift */; };
 		9FFDDCED614C4AB971B5FDAB /* OutputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80DCE96D78B121E661317F8E /* OutputService.swift */; };
-		A06275712170436A648784C7 /* UserProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = C266E5C70AAD5C4597F0AF47 /* UserProfile.swift */; };
-		ABAC29EC7E73D3693B3CEE37 /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA11DB729E224E2FB0C8FBFA /* LoginViewModel.swift */; };
+		ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69200CC3359B433509E3E7C5 /* KeychainStore.swift */; };
 		BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */; };
 		C81E7932DD337171B42A703D /* RecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF41F43ECF611F7DF15B6D /* RecordingService.swift */; };
 		D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */; };
 		D6A966006881517287550B2A /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1278BBE0DFB6124FCF67EED0 /* Config.swift */; };
 		DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986870957B3F79F64AE93655 /* SettingsService.swift */; };
 		EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */; };
-		EBD50C5D9B052E3A6D25C060 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C349A69E46B733CAA9C9174 /* AuthService.swift */; };
+		FC8CA7E3D7E29EEF8E17EBC4 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9694776FC320681A74AFC58C /* OpenAIClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,33 +39,28 @@
 		0C747F1BF22B506D33DD7CF9 /* VoiceflowDesktop-adhoc.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "VoiceflowDesktop-adhoc.entitlements"; sourceTree = "<group>"; };
 		1278BBE0DFB6124FCF67EED0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelViewModel.swift; sourceTree = "<group>"; };
-		21831A47F2593DBBD10B3FD4 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
-		2C349A69E46B733CAA9C9174 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceflowDesktopApp.swift; sourceTree = "<group>"; };
-		3D8F3F8DF189109B88D74050 /* BackendSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackendSchema.swift; sourceTree = "<group>"; };
+		3859001B87688555C43F1897 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
-		5F5320484F62C23BB51591FA /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		6A3F57B73BF470CEB470FC63 /* TranscriptionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionSession.swift; sourceTree = "<group>"; };
+		69200CC3359B433509E3E7C5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		6E79A466290CA8761E783FAE /* ModeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeProcessor.swift; sourceTree = "<group>"; };
+		768F27D8149E7D8144BAD286 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
 		79F3DF5D8238CBCF9FFA3DC7 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		80DCE96D78B121E661317F8E /* OutputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputService.swift; sourceTree = "<group>"; };
 		88CF41F43ECF611F7DF15B6D /* RecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingService.swift; sourceTree = "<group>"; };
+		9694776FC320681A74AFC58C /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		986870957B3F79F64AE93655 /* SettingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsService.swift; sourceTree = "<group>"; };
 		A0C8A93DE5C2E1C773207B17 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		C203490056D9249E43F16113 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		C266E5C70AAD5C4597F0AF47 /* UserProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfile.swift; sourceTree = "<group>"; };
-		C3013249724B3FF7C396E8E3 /* Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endpoints.swift; sourceTree = "<group>"; };
 		C7563138D9880266FA772ECF /* AppInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfo.swift; sourceTree = "<group>"; };
 		C7A9F2E671A9B5B1A61F6F7B /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
 		D263E9D2AEE6F1A5E6B3B6D7 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		D890CA6F7B69B61E3FEB566E /* StatusPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelView.swift; sourceTree = "<group>"; };
 		E4AE4459614E88846D38FC3E /* ShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutManager.swift; sourceTree = "<group>"; };
 		E5FA3A581A678762801BEF8A /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
-		ECCE6D26FD76B0B2EFFDEC84 /* SessionLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLogger.swift; sourceTree = "<group>"; };
 		F9A38204F9282ADCE15BC018 /* VoiceflowDesktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoiceflowDesktop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA1019C2601FF3C184A5A05C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		FA11DB729E224E2FB0C8FBFA /* LoginViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,24 +95,6 @@
 			path = Output;
 			sourceTree = "<group>";
 		};
-		0E96CC4EAC2DD3E776065A0B /* Models */ = {
-			isa = PBXGroup;
-			children = (
-				6A3F57B73BF470CEB470FC63 /* TranscriptionSession.swift */,
-				C266E5C70AAD5C4597F0AF47 /* UserProfile.swift */,
-			);
-			path = Models;
-			sourceTree = "<group>";
-		};
-		146F1000FB375E55D06249EB /* Login */ = {
-			isa = PBXGroup;
-			children = (
-				5F5320484F62C23BB51591FA /* LoginView.swift */,
-				FA11DB729E224E2FB0C8FBFA /* LoginViewModel.swift */,
-			);
-			path = Login;
-			sourceTree = "<group>";
-		};
 		1BE7453690BFCF9286A78B35 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -145,7 +117,6 @@
 				85647E69AF6BF8F4BD6E5CF3 /* App */,
 				CFD1A8EA7A0DE38AC2DFE626 /* Core */,
 				9DD107E5A0A718640EEDB454 /* Features */,
-				87E1C4B7FFABCC9B8E95CA1A /* Network */,
 				A8A892FED312B3C49731C893 /* Permissions */,
 				A00938A9DA92AB1BB943CF54 /* Resources */,
 				843117B1EC89EFCFA5EB8463 /* Shortcuts */,
@@ -175,7 +146,7 @@
 		739260BE9C1108D1B9C338E0 /* Logging */ = {
 			isa = PBXGroup;
 			children = (
-				ECCE6D26FD76B0B2EFFDEC84 /* SessionLogger.swift */,
+				768F27D8149E7D8144BAD286 /* HistoryStore.swift */,
 			);
 			path = Logging;
 			sourceTree = "<group>";
@@ -206,22 +177,11 @@
 			path = App;
 			sourceTree = "<group>";
 		};
-		87E1C4B7FFABCC9B8E95CA1A /* Network */ = {
-			isa = PBXGroup;
-			children = (
-				21831A47F2593DBBD10B3FD4 /* APIClient.swift */,
-				3D8F3F8DF189109B88D74050 /* BackendSchema.swift */,
-				C3013249724B3FF7C396E8E3 /* Endpoints.swift */,
-				0E96CC4EAC2DD3E776065A0B /* Models */,
-			);
-			path = Network;
-			sourceTree = "<group>";
-		};
 		9DD107E5A0A718640EEDB454 /* Features */ = {
 			isa = PBXGroup;
 			children = (
-				146F1000FB375E55D06249EB /* Login */,
 				C47CB87F36F6007FA6F4C824 /* MenuBar */,
+				A05B61F873EAD2B657A8409C /* Onboarding */,
 				83BE3F79BEFEEF45D676376B /* Settings */,
 				547EAED2B55204E09F29393E /* StatusPanel */,
 			);
@@ -242,6 +202,14 @@
 				45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */,
 			);
 			path = Transcription;
+			sourceTree = "<group>";
+		};
+		A05B61F873EAD2B657A8409C /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				3859001B87688555C43F1897 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
 			sourceTree = "<group>";
 		};
 		A8A892FED312B3C49731C893 /* Permissions */ = {
@@ -282,8 +250,9 @@
 			children = (
 				C7563138D9880266FA772ECF /* AppInfo.swift */,
 				1278BBE0DFB6124FCF67EED0 /* Config.swift */,
-				D20A5D08EE27C52FF980C3CB /* Auth */,
+				69200CC3359B433509E3E7C5 /* KeychainStore.swift */,
 				739260BE9C1108D1B9C338E0 /* Logging */,
+				D642D68520AE8AFEEE3FDC37 /* OpenAI */,
 				0324C017D45034FF55213425 /* Output */,
 				2ADE5C28E4C7BB042B4391EB /* Processing */,
 				BC76843FFE9518EB41C63A52 /* Recording */,
@@ -293,12 +262,12 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
-		D20A5D08EE27C52FF980C3CB /* Auth */ = {
+		D642D68520AE8AFEEE3FDC37 /* OpenAI */ = {
 			isa = PBXGroup;
 			children = (
-				2C349A69E46B733CAA9C9174 /* AuthService.swift */,
+				9694776FC320681A74AFC58C /* OpenAIClient.swift */,
 			);
-			path = Auth;
+			path = OpenAI;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -365,22 +334,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				12652588690EFA5ABAE0B534 /* APIClient.swift in Sources */,
 				9625DE809DF647E41737ED3F /* AppDelegate.swift in Sources */,
 				4D4F01FC9ACA55E62478A8A9 /* AppInfo.swift in Sources */,
 				BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */,
-				EBD50C5D9B052E3A6D25C060 /* AuthService.swift in Sources */,
-				4B2D36699AF1C9B22BBA917C /* BackendSchema.swift in Sources */,
 				D6A966006881517287550B2A /* Config.swift in Sources */,
-				5E3B1408BF7CFD8835AA61EB /* Endpoints.swift in Sources */,
-				8ABD82CEAEE96C5837C4105C /* LoginView.swift in Sources */,
-				ABAC29EC7E73D3693B3CEE37 /* LoginViewModel.swift in Sources */,
+				71E1D703CE2BABDD76AA419A /* HistoryStore.swift in Sources */,
+				ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */,
 				9BF714C42461818F5C317E3F /* MenuBarController.swift in Sources */,
 				3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */,
+				3FA7FB275C280983C9C22AA2 /* OnboardingView.swift in Sources */,
+				FC8CA7E3D7E29EEF8E17EBC4 /* OpenAIClient.swift in Sources */,
 				9FFDDCED614C4AB971B5FDAB /* OutputService.swift in Sources */,
 				5ECE84548F90AFA7E7C65828 /* PermissionsManager.swift in Sources */,
 				C81E7932DD337171B42A703D /* RecordingService.swift in Sources */,
-				7101E950FEC9D27E32BD6710 /* SessionLogger.swift in Sources */,
 				DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */,
 				4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */,
 				80681A89C12E9E70ADD966D2 /* SettingsViewModel.swift in Sources */,
@@ -388,8 +354,6 @@
 				25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */,
 				0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */,
 				EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */,
-				6906F422E38BE0A36864BC7D /* TranscriptionSession.swift in Sources */,
-				A06275712170436A648784C7 /* UserProfile.swift in Sources */,
 				64EBA98BCC8FD1F558D860C5 /* VoiceflowDesktopApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -448,7 +412,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -465,7 +429,7 @@
 				INFOPLIST_FILE = VoiceflowDesktop/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.voiceflow.desktop;
@@ -513,7 +477,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -536,7 +500,7 @@
 				INFOPLIST_FILE = VoiceflowDesktop/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.2.0;
+				MARKETING_VERSION = 0.3.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

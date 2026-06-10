@@ -1,30 +1,24 @@
 import SwiftUI
+import AppKit
 
 /// Compact status panel shown in the menu bar popover.
-/// Displays current state and quick-action links.
+/// Displays current state, the last dictation (with copy button), and quick actions.
 struct StatusPanelView: View {
     @ObservedObject var viewModel: StatusPanelViewModel
     var onSettings: () -> Void
-    var onSignOut: () -> Void
+    var onQuit: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header — shows app name + logged-in user + build version
+            // Header — app name + version
             HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text("Voiceflow")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        Text(AppInfo.displayString)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                    if let name = viewModel.profile?.displayName {
-                        Text(name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                HStack(spacing: 6) {
+                    Text("Voiceflow")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(AppInfo.displayString)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
                 Spacer()
                 Image(systemName: "waveform.circle.fill")
@@ -44,7 +38,20 @@ struct StatusPanelView: View {
 
             Divider()
 
-            // Shortcuts hint (shown in idle state only)
+            // API key missing → prominent CTA
+            if case .needsAPIKey = viewModel.state {
+                Button(action: onSettings) {
+                    Label("OpenAI API-Key eintragen", systemImage: "key.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                Divider()
+            }
+
+            // Shortcuts hint (idle state only)
             if case .idle = viewModel.state {
                 ShortcutsHintView(settings: viewModel.settings, onSettings: onSettings)
                     .padding(.horizontal, 16)
@@ -52,9 +59,9 @@ struct StatusPanelView: View {
                 Divider()
             }
 
-            // Blocked state information
-            if case .blocked(let reason) = viewModel.state {
-                BlockedView(reason: reason)
+            // Last dictation with copy button
+            if let last = viewModel.lastDictation, !last.isEmpty {
+                LastDictationView(text: last)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                 Divider()
@@ -62,12 +69,12 @@ struct StatusPanelView: View {
 
             // Footer actions
             HStack {
-                Button("Settings") { onSettings() }
+                Button("Einstellungen") { onSettings() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .font(.callout)
                 Spacer()
-                Button("Sign Out") { onSignOut() }
+                Button("Beenden") { onQuit() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
                     .font(.callout)
@@ -75,7 +82,7 @@ struct StatusPanelView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .frame(width: 260)
+        .frame(width: 280)
         .background(.background)
     }
 }
@@ -145,7 +152,7 @@ private struct ShortcutsHintView: View {
                 if s.shortcutsAreAllEmpty {
                     // First-run CTA — no shortcuts configured yet
                     Button(action: onSettings) {
-                        Label("Open Settings to configure shortcuts", systemImage: "arrow.right.circle.fill")
+                        Label("Shortcuts in den Einstellungen festlegen", systemImage: "arrow.right.circle.fill")
                             .font(.caption)
                             .foregroundStyle(.blue)
                     }
@@ -156,7 +163,7 @@ private struct ShortcutsHintView: View {
                     ShortcutLine(label: "Calm",     combo: s.shortcutCalm)
                 }
             } else {
-                Text("Configure shortcuts in Settings")
+                Text("Shortcuts in den Einstellungen festlegen")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -166,7 +173,7 @@ private struct ShortcutsHintView: View {
 
 private struct ShortcutLine: View {
     let label: String
-    let combo: String   // plain string from DB, e.g. "⌘⌥P" or ""
+    let combo: String   // display string, e.g. "⌘⌥P" or ""
 
     var body: some View {
         HStack {
@@ -174,24 +181,42 @@ private struct ShortcutLine: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Text(combo.isEmpty ? "Not set" : combo)
+            Text(combo.isEmpty ? "Nicht gesetzt" : combo)
                 .font(.caption.monospaced())
                 .foregroundStyle(combo.isEmpty ? .tertiary : .primary)
         }
     }
 }
 
-private struct BlockedView: View {
-    let reason: BlockedReason
+private struct LastDictationView: View {
+    let text: String
+    @State private var copied = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(reason.title)
-                .font(.callout.bold())
-                .foregroundStyle(reason == .suspended || reason == .rejected ? Color.red : Color.orange)
-            Text(reason.userMessage)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Letztes Diktat")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .textCase(.uppercase)
+                Spacer()
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    copied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                } label: {
+                    Label(copied ? "Kopiert" : "Kopieren",
+                          systemImage: copied ? "checkmark" : "doc.on.doc")
+                        .font(.caption2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(copied ? .green : .secondary)
+            }
+            Text(text)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -6,7 +6,7 @@ import SwiftUI
 @MainActor
 protocol MenuBarControllerDelegate: AnyObject {
     func menuBarDidRequestSettings()
-    func menuBarDidRequestSignOut()
+    func menuBarDidRequestHistory()
     func menuBarDidRequestCheckForUpdates()
     func menuBarDidRequestQuit()
 }
@@ -14,13 +14,13 @@ protocol MenuBarControllerDelegate: AnyObject {
 /// Owns the NSStatusItem (menu bar icon) and the popover panel.
 ///
 /// Left-click  → toggles the status-panel popover.
-/// Right-click → shows a utility NSMenu (Settings, Check for Updates, Sign Out, Quit).
+/// Right-click → shows a utility NSMenu (Settings, History, Check for Updates, Quit).
 @MainActor
 final class MenuBarController {
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
-    private let statusPanelVM = StatusPanelViewModel()
+    let statusPanelVM = StatusPanelViewModel()
     private weak var delegate: MenuBarControllerDelegate?
 
     // MARK: - Recording blink animation
@@ -53,8 +53,6 @@ final class MenuBarController {
     private static func brandIdleImage() -> NSImage? {
         if let img = NSImage(named: "MenuBarIcon") {
             img.isTemplate = true
-            // Constrain to a tidy menu-bar size so the template renders crisply
-            // regardless of the source PNG resolution.
             img.size = NSSize(width: 18, height: 18)
             return img
         }
@@ -72,14 +70,14 @@ final class MenuBarController {
                 self?.closePopover()
                 self?.delegate?.menuBarDidRequestSettings()
             },
-            onSignOut: { [weak self] in
+            onQuit: { [weak self] in
                 self?.closePopover()
-                self?.delegate?.menuBarDidRequestSignOut()
+                self?.delegate?.menuBarDidRequestQuit()
             }
         )
 
         let pop = NSPopover()
-        pop.contentSize = NSSize(width: 260, height: 320)
+        pop.contentSize = NSSize(width: 280, height: 340)
         pop.behavior = .transient
         pop.contentViewController = NSHostingController(rootView: panel)
         self.popover = pop
@@ -87,9 +85,8 @@ final class MenuBarController {
 
     // MARK: - State Updates
 
-    func update(state: AppState, profile: UserProfile?, settings: AppSettings?) {
+    func update(state: AppState, settings: AppSettings? = nil) {
         statusPanelVM.state = state
-        if let profile  { statusPanelVM.profile  = profile  }
         if let settings { statusPanelVM.settings = settings }
         updateIcon(for: state)
 
@@ -104,6 +101,11 @@ final class MenuBarController {
         if case .recording = state { /* keep counting */ } else {
             statusPanelVM.recordingSeconds = 0
         }
+    }
+
+    /// Records the most recent dictation so the panel can show it with a copy button.
+    func setLastDictation(_ text: String) {
+        statusPanelVM.lastDictation = text
     }
 
     /// Called every second while recording to update the live timer.
@@ -138,39 +140,39 @@ final class MenuBarController {
         case .idle:
             button.image = Self.brandIdleImage()
             button.contentTintColor = nil
+        case .needsAPIKey:
+            button.image = NSImage(systemSymbolName: "key.fill",
+                                   accessibilityDescription: "Voiceflow — API-Key fehlt")
+            button.image?.isTemplate = false
+            button.contentTintColor = .systemOrange
         case .recording:
             button.image = NSImage(systemSymbolName: "record.circle.fill",
-                                   accessibilityDescription: "Voiceflow — Recording")
+                                   accessibilityDescription: "Voiceflow — Aufnahme")
             button.image?.isTemplate = false
             button.contentTintColor = .systemRed
         case .processing:
             button.image = NSImage(systemSymbolName: "ellipsis.circle",
-                                   accessibilityDescription: "Voiceflow — Processing")
+                                   accessibilityDescription: "Voiceflow — Verarbeitung")
             button.image?.isTemplate = true
             button.contentTintColor = nil
         case .retrying:
             button.image = NSImage(systemSymbolName: "arrow.clockwise.circle",
-                                   accessibilityDescription: "Voiceflow — Retrying")
+                                   accessibilityDescription: "Voiceflow — Neuer Versuch")
             button.image?.isTemplate = false
             button.contentTintColor = .systemOrange
         case .success, .successWithClipboard:
             button.image = NSImage(systemSymbolName: "checkmark.circle.fill",
-                                   accessibilityDescription: "Voiceflow — Done")
+                                   accessibilityDescription: "Voiceflow — Fertig")
             button.image?.isTemplate = false
             button.contentTintColor = .systemGreen
         case .successWithRawFallback:
             button.image = NSImage(systemSymbolName: "exclamationmark.bubble.fill",
-                                   accessibilityDescription: "Voiceflow — Server unavailable, raw text")
+                                   accessibilityDescription: "Voiceflow — Rohtext eingefügt")
             button.image?.isTemplate = false
             button.contentTintColor = .systemYellow
         case .error:
             button.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill",
-                                   accessibilityDescription: "Voiceflow — Error")
-            button.image?.isTemplate = false
-            button.contentTintColor = .systemOrange
-        case .blocked:
-            button.image = NSImage(systemSymbolName: "lock.circle.fill",
-                                   accessibilityDescription: "Voiceflow — Blocked")
+                                   accessibilityDescription: "Voiceflow — Fehler")
             button.image?.isTemplate = false
             button.contentTintColor = .systemOrange
         }
@@ -203,13 +205,29 @@ final class MenuBarController {
 
     // MARK: - Right-Click Utility Menu
 
-    /// Shown on right-click. Provides quick access to utility actions without
-    /// opening the full status-panel popover.
     private func showUtilityMenu(relativeTo button: NSStatusBarButton) {
         let menu = NSMenu()
 
+        let settingsItem = NSMenuItem(
+            title: "Einstellungen…",
+            action: #selector(handleSettings),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        let historyItem = NSMenuItem(
+            title: "Verlauf öffnen",
+            action: #selector(handleHistory),
+            keyEquivalent: ""
+        )
+        historyItem.target = self
+        menu.addItem(historyItem)
+
+        menu.addItem(.separator())
+
         let updateItem = NSMenuItem(
-            title: "Check for Updates…",
+            title: "Nach Updates suchen…",
             action: #selector(handleCheckForUpdates),
             keyEquivalent: ""
         )
@@ -218,28 +236,8 @@ final class MenuBarController {
 
         menu.addItem(.separator())
 
-        let settingsItem = NSMenuItem(
-            title: "Settings…",
-            action: #selector(handleSettings),
-            keyEquivalent: ","
-        )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        menu.addItem(.separator())
-
-        let signOutItem = NSMenuItem(
-            title: "Sign Out",
-            action: #selector(handleSignOut),
-            keyEquivalent: ""
-        )
-        signOutItem.target = self
-        menu.addItem(signOutItem)
-
-        menu.addItem(.separator())
-
         let quitItem = NSMenuItem(
-            title: "Quit Voiceflow",
+            title: "Voiceflow beenden",
             action: #selector(handleQuit),
             keyEquivalent: "q"
         )
@@ -254,9 +252,9 @@ final class MenuBarController {
     }
 
     @objc private func handleCheckForUpdates() { delegate?.menuBarDidRequestCheckForUpdates() }
-    @objc private func handleSettings()         { delegate?.menuBarDidRequestSettings() }
-    @objc private func handleSignOut()          { delegate?.menuBarDidRequestSignOut() }
-    @objc private func handleQuit()             { delegate?.menuBarDidRequestQuit() }
+    @objc private func handleSettings()        { delegate?.menuBarDidRequestSettings() }
+    @objc private func handleHistory()         { delegate?.menuBarDidRequestHistory() }
+    @objc private func handleQuit()            { delegate?.menuBarDidRequestQuit() }
 
     // MARK: - Cleanup
 

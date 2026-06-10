@@ -12,11 +12,11 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             // Title bar area
             HStack {
-                Text("Settings")
+                Text("Einstellungen")
                     .font(.title2.bold())
                 Spacer()
                 if viewModel.saveSuccess {
-                    Label("Saved", systemImage: "checkmark.circle.fill")
+                    Label("Gespeichert", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                         .font(.callout)
                         .transition(.opacity)
@@ -28,6 +28,8 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
+                    APIKeySection(viewModel: viewModel)
+                    Divider()
                     ShortcutsSection(viewModel: viewModel)
                     Divider()
                     LanguageSection(draft: $viewModel.draft)
@@ -54,20 +56,90 @@ struct SettingsView: View {
                     Text("Voiceflow \(AppInfo.displayString)")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
-                        .help("Build identifier — include this in bug reports.")
+                        .help("Build-Kennung — bitte bei Fehlermeldungen mit angeben.")
                 }
                 Spacer()
-                Button("Reset to Defaults") { viewModel.resetToDefaults() }
+                Button("Zurücksetzen") { viewModel.resetToDefaults() }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                Button("Save") { Task { await viewModel.save() } }
+                Button("Speichern") { viewModel.save() }
                     .buttonStyle(.borderedProminent)
                     .disabled(!viewModel.canSave)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .frame(width: 500, height: 540)
+        .frame(width: 520, height: 600)
+    }
+}
+
+// MARK: - Section: API Key
+
+private struct APIKeySection: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
+    var body: some View {
+        SectionHeader(
+            title: "OpenAI API-Key",
+            subtitle: "Dein Key bleibt im Schlüsselbund dieses Macs und wird nur für OpenAI-Anfragen verwendet."
+        )
+
+        VStack(alignment: .leading, spacing: 8) {
+            // Current status row
+            HStack(spacing: 8) {
+                switch viewModel.apiKeyStatus {
+                case .missing:
+                    Label("Kein Key hinterlegt", systemImage: "key.slash")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                case .stored:
+                    Label("Key hinterlegt (\(viewModel.maskedKey))", systemImage: "key.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                case .validated:
+                    Label("Key geprüft & gespeichert (\(viewModel.maskedKey))", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .font(.callout)
+                case .invalid(let msg):
+                    Label(msg, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                        .lineLimit(2)
+                }
+                Spacer()
+                if case .missing = viewModel.apiKeyStatus {} else {
+                    Button("Entfernen") { viewModel.removeAPIKey() }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+            }
+
+            // New key entry
+            HStack(spacing: 8) {
+                SecureField("Neuen Key einfügen (sk-…)", text: $viewModel.apiKeyInput)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.callout.monospaced())
+                Button {
+                    Task { await viewModel.saveAPIKey() }
+                } label: {
+                    if viewModel.isValidatingKey {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("Prüfen & speichern")
+                    }
+                }
+                .disabled(viewModel.apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isValidatingKey)
+            }
+
+            Button("Key auf platform.openai.com erstellen") {
+                if let url = URL(string: Config.apiKeysURL) {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+        }
     }
 }
 
@@ -77,22 +149,22 @@ private struct ShortcutsSection: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        SectionHeader(title: "Keyboard Shortcuts", subtitle: "Press the same shortcut again to stop recording.")
+        SectionHeader(title: "Shortcuts", subtitle: "Gleicher Shortcut nochmals drücken stoppt die Aufnahme.")
 
         VStack(spacing: 12) {
             ShortcutRow(
-                label: "Private Mode",
-                description: "Minimal correction, original wording preserved",
+                label: "Private",
+                description: "Leichte Korrektur — Wortlaut bleibt erhalten",
                 name: .dictatePrivate
             )
             ShortcutRow(
-                label: "Business Mode",
-                description: "Professional, customer-facing tone",
+                label: "Business",
+                description: "Professioneller, geschäftstauglicher Ton",
                 name: .dictateBusiness
             )
             ShortcutRow(
-                label: "Calm Mode",
-                description: "De-escalated, respectful rewrite",
+                label: "Calm",
+                description: "Deeskaliert — sachlich statt emotional",
                 name: .dictateCalm
             )
         }
@@ -137,13 +209,13 @@ private struct LanguageSection: View {
         Toggle("Sprache automatisch erkennen", isOn: $draft.autoDetectLanguage)
 
         if !draft.autoDetectLanguage {
-            Picker("Language", selection: $draft.manualLanguageOverride) {
+            Picker("Sprache", selection: $draft.manualLanguageOverride) {
                 ForEach(SupportedLanguage.allCases) { lang in
                     Text(lang.displayName).tag(lang)
                 }
             }
             .pickerStyle(.menu)
-            .frame(maxWidth: 200)
+            .frame(maxWidth: 240)
         }
     }
 }
@@ -155,8 +227,8 @@ private struct OutputSection: View {
 
     var body: some View {
         SectionHeader(
-            title: "Output Mode",
-            subtitle: "Insert into field requires Accessibility permission."
+            title: "Ausgabe",
+            subtitle: "Direktes Einfügen benötigt die Bedienungshilfen-Berechtigung."
         )
 
         ForEach(OutputMode.allCases) { mode in
@@ -170,7 +242,7 @@ private struct OutputSection: View {
                     Text(mode.displayName)
                         .font(.callout)
                     if mode == .insertIntoField {
-                        Text("Falls back to clipboard if Accessibility is not granted.")
+                        Text("Fällt auf die Zwischenablage zurück, wenn Bedienungshilfen fehlen.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -187,19 +259,19 @@ private struct MicrophoneSection: View {
     @State private var devices: [(id: String, name: String)] = []
 
     var body: some View {
-        SectionHeader(title: "Microphone", subtitle: "Default uses the system input device.")
+        SectionHeader(title: "Mikrofon", subtitle: "Standard verwendet das System-Eingabegerät.")
 
         Group {
             if devices.isEmpty {
-                Text("No additional input devices found.")
+                Text("Keine zusätzlichen Eingabegeräte gefunden.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Picker("Input device", selection: Binding(
+                Picker("Eingabegerät", selection: Binding(
                     get: { draft.microphoneDevice ?? "" },
                     set: { draft.microphoneDevice = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("System default").tag("")
+                    Text("System-Standard").tag("")
                     ForEach(devices, id: \.id) { device in
                         Text(device.name).tag(device.id)
                     }
@@ -223,30 +295,28 @@ private struct PermissionsSection: View {
 
     var body: some View {
         SectionHeader(
-            title: "Permissions",
-            subtitle: "Microphone is required. Accessibility enables direct text insertion."
+            title: "Berechtigungen",
+            subtitle: "Mikrofon ist erforderlich. Bedienungshilfen ermöglichen direktes Einfügen."
         )
 
         VStack(spacing: 8) {
             PermissionRow(
                 icon: "mic.fill",
-                label: "Microphone",
-                note: "Required — to record your speech",
+                label: "Mikrofon",
+                note: "Erforderlich — zeichnet deine Sprache auf",
                 granted: hasMic,
                 settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
             )
             PermissionRow(
                 icon: "keyboard",
-                label: "Accessibility",
-                note: "Optional — enables direct text insertion (falls back to clipboard)",
+                label: "Bedienungshilfen",
+                note: "Optional — fügt Text direkt ein (sonst Zwischenablage)",
                 granted: hasAX,
                 settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
             )
         }
         .onAppear {
             refreshStatus()
-            // Poll every 2 s — lets the status flip to ✅ as soon as the user
-            // grants permission in System Settings and switches back here.
             pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
                 refreshStatus()
             }
@@ -285,11 +355,11 @@ private struct PermissionRow: View {
             }
             Spacer()
             if granted {
-                Label("Granted", systemImage: "checkmark.circle.fill")
+                Label("Erteilt", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.caption)
             } else {
-                Button("Grant Access") {
+                Button("Erlauben") {
                     if let url = URL(string: settingsURL) {
                         NSWorkspace.shared.open(url)
                     }
@@ -317,4 +387,3 @@ private struct SectionHeader: View {
         }
     }
 }
-

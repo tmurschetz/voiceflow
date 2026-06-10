@@ -18,16 +18,71 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 <!-- New entries since the last tagged release land here. -->
 
-### Changed
-- Sprint 2: auto-paste fix via CGEventPostToPid + Swiss language label cleanup (25d35e0)
-- V1 completion: Whisper transcription, Gemini mode processing, recording UX, beta distribution (0bf97da)
-- Complete desktop app: backend integration, full pipeline, schema audit, and distribution (3a92a2c)
-- Initial commit (b5814e6)
+---
+
+## [0.3.0] — 2026-06-10
+
+**The "Fable" release: fully local-first. Bring your own OpenAI key — no login,
+no app backend, nothing between you and OpenAI.**
+
+### Changed (architecture)
+- **Supabase/Lovable backend removed entirely.** No more login, profiles,
+  server-side settings, or edge-function processing. Deleted: `AuthService`,
+  `LoginView`/`LoginViewModel`, `APIClient`, `Endpoints`, `BackendSchema`,
+  `UserProfile`, `TranscriptionSession`, `SessionLogger`.
+- **Setup is now a single step**: paste your OpenAI API key. The key is validated
+  against `/v1/models` and stored in the macOS Keychain (this device only) —
+  inspired by the bring-your-own-key model of tools like MacWhisper.
+- **Tone-of-voice prompts now live in the app** (`ProcessingMode.systemPrompt`)
+  and run via OpenAI chat completions (`gpt-4o-mini`). Swiss rules built in:
+  Swiss Standard German output (ss statt ß) for German/dialect input, English
+  for English input, Du/Sie mirrored from the transcript, self-corrections
+  applied, filler words removed, no letter structure ever added.
+- **Settings stored locally** (UserDefaults) — saving is instant, no 401s, no
+  token refresh, works offline.
+
+### Added
+- **Faster transcription**: `gpt-4o-mini-transcribe` (half the price of
+  whisper-1, lower latency, better word error rate) with automatic, permanent
+  fallback to `whisper-1` for accounts without access to the new model.
+- **Onboarding window** on first launch: paste key → validate → go. Includes a
+  link to create a key and a cost estimate (~0.3 Rappen/Minute).
+- **API key section in Settings**: masked display, validate & replace, remove.
+- **Local dictation history** (`~/Library/Application Support/Voiceflow/history.jsonl`),
+  one JSON line per dictation. Right-click menu → "Verlauf öffnen" reveals it in Finder.
+- **Last dictation in the status panel** with a copy button — recover any result
+  without re-dictating.
+- New menu bar state `needsAPIKey` (orange key icon) with a CTA into Settings.
+- UI language: German throughout (matches the app's audience).
 
 ### Fixed
-- Fix Accessibility permission: show dialog once per build, live status in Settings (1c0afdb)
-- Fix HTTP 401 on settings save: use live session reference + auto token refresh (f568c15)
-- Fix: shortcuts wiped on every save, handler replaced with no-op (69d27eb)
+- The chronic "Processing Network error" outages are gone by construction — the
+  flaky Lovable edge function no longer exists in the pipeline. Retry + raw-text
+  fallback retained for OpenAI itself (429/5xx/timeouts).
+
+---
+
+## [0.2.1] — 2026-05-07
+
+### Added
+- **App version visible in the UI** so users (and bug reports) can identify the
+  exact build they run. Shown in the Settings footer (with a tooltip prompting
+  users to include it in bug reports) and in the status panel header next to
+  the Voiceflow title. New `AppInfo` enum reads `CFBundleShortVersionString`
+  + `CFBundleVersion` and exposes a `v0.2.1 (4)` display string.
+
+### Fixed
+- **Recordings lost on connection timeout** — the v0.2.0 retry loop only matched
+  `APIError` (HTTP-level errors). When the edge function hung for 74 s and the
+  socket timed out, the resulting `URLError` bypassed retry entirely and the
+  audio was discarded. `ModeProcessor.isRetryable` now also classifies
+  `URLError.{timedOut, cannotFindHost, cannotConnectToHost,
+  networkConnectionLost, notConnectedToInternet, dnsLookupFailed,
+  secureConnectionFailed, badServerResponse, ...}` as retryable, alongside any
+  `ProcessingError` raised from a server-returned `{"error": "…"}` body.
+- The retry catch is now a generic `catch` (instead of `catch let apiError as APIError`),
+  so unexpected error types fall back to the raw Whisper transcript instead of
+  surfacing a user-visible "Error: …" and dropping the audio.
 
 ---
 

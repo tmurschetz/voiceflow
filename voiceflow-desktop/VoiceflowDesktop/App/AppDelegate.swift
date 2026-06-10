@@ -4,34 +4,33 @@ import SwiftUI
 /// Central coordinator: owns the menu bar item, orchestrates startup checks,
 /// and wires together all services.
 ///
-/// Startup sequence:
-///   1. Show menu bar icon (placeholder while loading)
-///   2. Restore session from Keychain + refresh token against backend
-///   3. If no valid session → show login window
-///   4. Fetch profiles row (filter: user_id = auth.user.id)
-///   5. Check profile.status: must be 'active'; otherwise show blocked state
-///   6. Load user_settings (PATCH on save, POST on first insert)
-///   7. Register global shortcuts
-///   8. Request microphone + Accessibility permissions
+/// V2 architecture — fully local:
+///   1. Show menu bar icon
+///   2. Load settings (UserDefaults)
+///   3. Register global shortcuts
+///   4. If no OpenAI API key in Keychain → show onboarding window
+///   5. Request microphone + Accessibility permissions
+///
+/// Dictation pipeline (toggle: press to start, press again to stop):
+///   record → transcribe (OpenAI, user's key) → tone-of-voice rewrite (OpenAI)
+///   → insert into active app (AX or clipboard+⌘V) → local history log
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Services
 
-    let authService        = AuthService()
-    let settingsService    = SettingsService()
-    let recordingService   = RecordingService()
+    let settingsService      = SettingsService()
+    let recordingService     = RecordingService()
     let transcriptionService = TranscriptionService()
-    let modeProcessor      = ModeProcessor()
-    let outputService      = OutputService()
-    let sessionLogger      = SessionLogger()
-    let permissionsManager = PermissionsManager()
+    let modeProcessor        = ModeProcessor()
+    let outputService        = OutputService()
+    let permissionsManager   = PermissionsManager()
 
     // MARK: - UI
 
-    private var menuBarController:        MenuBarController?
-    private var loginWindowController:    NSWindowController?
-    private var settingsWindowController: NSWindowController?
+    private var menuBarController:          MenuBarController?
+    private var onboardingWindowController: NSWindowController?
+    private var settingsWindowController:   NSWindowController?
 
     // MARK: - Recording timer
 
@@ -42,14 +41,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         menuBarController = MenuBarController(delegate: self)
         resetAXPromptIfNewBuild()
-        Task { await performStartupChecks() }
+
+        // Load local settings + bind shortcuts immediately — no network needed.
+        let settings = settingsService.loadSettings()
+        ShortcutManager.shared.register(settings: settings) { [weak self] mode in
+            self?.handleShortcutTriggered(mode: mode)
+        }
+
+        if KeychainStore.hasAPIKey {
+            menuBarController?.update(state: .idle, settings: settings)
+        } else {
+            menuBarController?.update(state: .needsAPIKey, settings: settings)
+            showOnboardingWindow()
+        }
+
+        Task { await permissionsManager.requestRequiredPermissions() }
     }
 
-    /// Resets the "Accessibility already prompted" flag whenever a new binary is installed.
-    /// Uses the executable's modification date as a build fingerprint — it changes on
-    /// every `make install` even when the version number stays the same.
-    /// This ensures the Accessibility prompt appears exactly once per build, so
-    /// re-installs don't silently revoke Accessibility without notifying the user.
+    /// Resets the "Accessibility already prompted" flag whenever a new binary is
+    /// installed. Ad-hoc builds get a new signature per install, which revokes AX —
+    /// this makes the hint dialog appear exactly once per build.
     private func resetAXPromptIfNewBuild() {
         let buildKey = "com.voiceflow.desktop.last_binary_date"
         guard let execURL = Bundle.main.executableURL,
@@ -67,53 +78,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = nil
     }
 
-    // MARK: - Startup
-
-    private func performStartupChecks() async {
-        do {
-            // Step 1: Restore + refresh stored session
-            guard let session = try await authService.validateStoredSession() else {
-                await showLoginWindow()
-                return
-            }
-
-            // Step 2: Fetch profile (filter on user_id, not profiles.id)
-            let profile = try await authService.fetchUserProfile(session: session)
-
-            // Step 3: Enforce access — only 'active' users may proceed
-            if !profile.status.isAllowedAccess {
-                if let reason = profile.status.blockedReason {
-                    await updateMenuBarState(.blocked(reason))
-                }
-                return
-            }
-
-            // Step 4: Fetch role (informational, non-blocking on error)
-            _ = try? await authService.fetchUserRole(session: session)
-
-            // Step 5: Load settings
-            let settings = try await settingsService.loadSettings(session: session)
-
-            // Step 6: Register shortcuts
-            ShortcutManager.shared.register(settings: settings) { [weak self] mode in
-                self?.handleShortcutTriggered(mode: mode)
-            }
-
-            // Step 7: Request permissions (non-blocking)
-            await permissionsManager.requestRequiredPermissions()
-
-            // Ready
-            menuBarController?.update(state: .idle, profile: profile, settings: settings)
-
-        } catch {
-            menuBarController?.update(
-                state: .error(error.localizedDescription),
-                profile: nil,
-                settings: nil
-            )
-        }
-    }
-
     // MARK: - Dictation Pipeline
 
     func handleShortcutTriggered(mode: ProcessingMode) {
@@ -121,7 +85,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func runDictationPipeline(mode: ProcessingMode) async {
-        guard let session = authService.currentSession else { return }
+        // No key → send the user to onboarding instead of failing mid-pipeline.
+        guard KeychainStore.hasAPIKey else {
+            await updateMenuBarState(.needsAPIKey)
+            showOnboardingWindow()
+            return
+        }
+
         let settings = settingsService.currentSettings
         let outputMode = settings?.outputMode ?? .insertIntoField
 
@@ -129,9 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Second press: stop → transcribe → process → output → log
             // Capture the frontmost app PID NOW — before any async work —
             // so the paste keystroke targets the correct app even after
-            // several seconds of Whisper + Gemini processing.
+            // a few seconds of processing.
             let targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-            let startedAt = recordingService.recordingStartedAt ?? Date()
             let audioSeconds = Int(recordingService.currentDurationSeconds)
             var audio: RecordedAudio?
 
@@ -141,54 +110,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let audio else { return }
                 await updateMenuBarState(.processing)
 
-                // Transcribe
+                // Transcribe (fast model, user's key)
                 let transcriptionResult = try await transcriptionService.transcribe(
                     audio: audio,
-                    language: settings?.language ?? .autoDetect,
-                    mode: mode,
-                    session: session
+                    language: settings?.language ?? .autoDetect
                 )
 
-                // Mode processing — auto-retries transient 5xx and falls back to
-                // raw transcript so the user never loses 2 minutes of dictation.
+                // Tone-of-voice rewrite — retries transient failures and falls
+                // back to the raw transcript so no dictation is ever lost.
                 let processingResult = try await modeProcessor.process(
                     text: transcriptionResult.transcript,
                     mode: mode,
-                    language: transcriptionResult.usedLocale,
-                    session: session,
                     onRetry: { [weak self] event in
                         switch event {
                         case .willRetryIn(let sec, let attempt, let total):
                             self?.menuBarController?.update(
-                                state: .retrying(attempt: attempt, total: total, secondsRemaining: sec),
-                                profile: nil, settings: nil)
+                                state: .retrying(attempt: attempt, total: total, secondsRemaining: sec))
                         case .retrying:
-                            self?.menuBarController?.update(state: .processing,
-                                                            profile: nil, settings: nil)
+                            self?.menuBarController?.update(state: .processing)
                         }
                     }
                 )
                 let processed = processingResult.text
-                let usedFallback = processingResult.usedFallback
 
                 // Output — returns true if clipboard was used instead of AX insertion
-                let usedClipboard = try await outputService.output(text: processed, mode: outputMode, targetPID: targetPID)
+                let usedClipboard = try await outputService.output(
+                    text: processed, mode: outputMode, targetPID: targetPID)
 
-                // Log success (mark fallback in error_message so we can audit later)
-                await sessionLogger.logCompleted(
-                    session: session,
+                // Local history + last-dictation in the panel
+                HistoryStore.shared.logCompleted(
                     mode: mode,
-                    rawTranscript: transcriptionResult.transcript,
-                    finalText: processed,
-                    detectedLanguage: transcriptionResult.usedLocale,
-                    outputMode: outputMode,
-                    startedAt: startedAt,
-                    audioSeconds: audioSeconds
+                    raw: transcriptionResult.transcript,
+                    final: processed,
+                    audioSeconds: audioSeconds,
+                    usedFallback: processingResult.usedFallback
                 )
+                menuBarController?.setLastDictation(processed)
 
-                // Pick the most informative success state for the user
+                // Pick the most informative success state
                 let successState: AppState
-                if usedFallback {
+                if processingResult.usedFallback {
                     successState = .successWithRawFallback
                 } else if usedClipboard && outputMode == .insertIntoField {
                     successState = .successWithClipboard
@@ -196,20 +157,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     successState = .success
                 }
                 await updateMenuBarState(successState)
-                // Linger longer on the fallback message so the user notices it
-                let dwellNanos: UInt64 = usedFallback ? 4_000_000_000 : 2_000_000_000
+                let dwellNanos: UInt64 = processingResult.usedFallback ? 4_000_000_000 : 2_000_000_000
                 try? await Task.sleep(nanoseconds: dwellNanos)
                 await updateMenuBarState(.idle)
 
             } catch {
                 stopRecordingTimer()
-                await sessionLogger.logFailed(
-                    session: session,
-                    mode: mode,
-                    errorMessage: error.localizedDescription,
-                    outputMode: outputMode,
-                    startedAt: startedAt
-                )
+                HistoryStore.shared.logFailed(mode: mode, errorMessage: error.localizedDescription)
                 await updateMenuBarState(.error(error.localizedDescription))
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await updateMenuBarState(.idle)
@@ -234,42 +188,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Windows
 
-    func showLoginWindow() async {
-        guard loginWindowController == nil else {
-            loginWindowController?.window?.makeKeyAndOrderFront(nil)
+    private func showOnboardingWindow() {
+        if let existing = onboardingWindowController {
+            existing.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let vm = LoginViewModel(authService: authService) { [weak self] in
-            self?.loginWindowController?.close()
-            self?.loginWindowController = nil
-            Task { await self?.performStartupChecks() }
+        let vm = OnboardingViewModel()
+        vm.onComplete = { [weak self] in
+            guard let self else { return }
+            self.onboardingWindowController?.close()
+            self.onboardingWindowController = nil
+            self.menuBarController?.update(state: .idle, settings: self.settingsService.currentSettings)
+            // Refresh the key status shown in an already-open Settings window next time.
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 440),
-            styleMask: [.titled, .closable, .miniaturizable],
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 420),
+            styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Voiceflow — Sign In"
+        window.title = "Voiceflow — Setup"
         window.center()
-        window.contentView = NSHostingView(rootView: LoginView(viewModel: vm))
+        window.contentView = NSHostingView(rootView: OnboardingView(viewModel: vm))
         window.isReleasedWhenClosed = false
-        loginWindowController = NSWindowController(window: window)
-        loginWindowController?.showWindow(nil)
+        onboardingWindowController = NSWindowController(window: window)
+        onboardingWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func showSettingsWindow() {
-        guard authService.currentSession != nil else { return }
         if settingsWindowController == nil {
-            let vm = SettingsViewModel(settingsService: settingsService, authService: authService)
+            let vm = SettingsViewModel(settingsService: settingsService)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 520, height: 560),
+                contentRect: NSRect(x: 0, y: 0, width: 520, height: 620),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Voiceflow — Settings"
+            window.title = "Voiceflow — Einstellungen"
             window.center()
             window.contentView = NSHostingView(rootView: SettingsView(viewModel: vm))
             window.isReleasedWhenClosed = false
@@ -298,7 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Helpers
 
     private func updateMenuBarState(_ state: AppState) async {
-        menuBarController?.update(state: state, profile: nil, settings: nil)
+        menuBarController?.update(state: state)
     }
 }
 
@@ -307,22 +264,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 extension AppDelegate: MenuBarControllerDelegate {
     func menuBarDidRequestSettings() { showSettingsWindow() }
 
-    func menuBarDidRequestSignOut() {
-        Task {
-            await authService.signOut()
-            ShortcutManager.shared.unregisterAll()
-            settingsWindowController?.close()
-            settingsWindowController = nil
-            await showLoginWindow()
-        }
+    func menuBarDidRequestHistory() {
+        // Reveal the local history file in Finder — it's the user's data.
+        NSWorkspace.shared.activateFileViewerSelecting([HistoryStore.shared.fileURL])
     }
 
     func menuBarDidRequestCheckForUpdates() {
         // Sparkle not active in ad-hoc beta build — updates are distributed via DMG.
         // Phase 2 (Developer ID + notarization) will re-enable this.
         let alert = NSAlert()
-        alert.messageText = "Updates coming soon"
-        alert.informativeText = "Auto-updates are not yet enabled in this beta. Download the latest version from your administrator."
+        alert.messageText = "Updates folgen bald"
+        alert.informativeText = "Auto-Updates sind in dieser Beta noch nicht aktiv. Du bekommst neue Versionen als DMG."
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()

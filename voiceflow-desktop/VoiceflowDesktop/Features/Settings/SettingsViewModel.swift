@@ -5,21 +5,32 @@ import KeyboardShortcuts
 @MainActor
 final class SettingsViewModel: ObservableObject {
 
-    /// Working copy — only committed to backend when user presses Save.
+    /// Working copy — committed locally when the user presses Save.
     @Published var draft: AppSettings
 
-    @Published var isSaving:     Bool   = false
-    @Published var saveError:    String? = nil
-    @Published var saveSuccess:  Bool   = false
+    @Published var isSaving:    Bool    = false
+    @Published var saveError:   String? = nil
+    @Published var saveSuccess: Bool    = false
+
+    // MARK: - API key management
+
+    /// New key the user typed (empty = no change).
+    @Published var apiKeyInput: String = ""
+    @Published var apiKeyStatus: APIKeyStatus = KeychainStore.hasAPIKey ? .stored : .missing
+    @Published var isValidatingKey = false
+
+    enum APIKeyStatus: Equatable {
+        case missing
+        case stored
+        case validated
+        case invalid(String)
+    }
 
     private let settingsService: SettingsService
-    /// AuthService reference — always reads the LIVE current session, never a stale copy.
-    private let authService: AuthService
 
-    init(settingsService: SettingsService, authService: AuthService) {
+    init(settingsService: SettingsService) {
         self.settingsService = settingsService
-        self.authService     = authService
-        self.draft           = settingsService.currentSettings ?? AppSettings()
+        self.draft = settingsService.currentSettings ?? AppSettings()
     }
 
     // MARK: - Validation
@@ -28,72 +39,66 @@ final class SettingsViewModel: ObservableObject {
 
     var canSave: Bool { validationError == nil && !isSaving }
 
-    // MARK: - Save
+    var maskedKey: String { KeychainStore.maskedKey }
 
-    func save() async {
+    // MARK: - Save settings (local)
+
+    func save() {
         guard canSave else { return }
-        isSaving     = true
-        saveError    = nil
-        saveSuccess  = false
+        isSaving = true
+        saveError = nil
+        saveSuccess = false
         defer { isSaving = false }
 
-        // Always use the live session — avoids 401s from stale token snapshots.
-        guard let session = authService.currentSession else {
-            saveError = "Not signed in. Please restart the app."
-            return
-        }
-
-        // Sync shortcut strings from KeyboardShortcuts' own UserDefaults storage
-        // before writing to the DB.
         syncShortcutsFromRecorder()
 
         do {
-            try await performSave(session: session)
+            try settingsService.saveSettings(draft)
             saveSuccess = true
             ShortcutManager.shared.reattachHandlers()
-        } catch APIError.httpError(let code, _) where code == 401 {
-            // Access token expired — refresh and retry once.
-            do {
-                try await authService.refreshCurrentSession()
-                guard let fresh = authService.currentSession else {
-                    saveError = "Session expired. Please sign out and sign in again."
-                    return
-                }
-                do {
-                    try await performSave(session: fresh)
-                    saveSuccess = true
-                    ShortcutManager.shared.reattachHandlers()
-                } catch {
-                    saveError = error.localizedDescription
-                }
-            } catch {
-                saveError = "Session expired. Please sign out and sign in again."
-            }
         } catch {
             saveError = error.localizedDescription
         }
-    }
-
-    private func performSave(session: SupabaseSession) async throws {
-        try await settingsService.saveSettings(draft, session: session)
     }
 
     func resetToDefaults() {
         draft = AppSettings()
     }
 
-    // MARK: - Shortcut Sync
+    // MARK: - API key save
 
-    /// Reads the current shortcut bindings from KeyboardShortcuts (which the
-    /// `KeyboardShortcuts.Recorder` UI component updates in-place) and writes
-    /// them back into `draft` so they're included in the DB save.
+    /// Validates the typed key against the OpenAI API and stores it in the Keychain.
+    func saveAPIKey() async {
+        let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        isValidatingKey = true
+        defer { isValidatingKey = false }
+
+        do {
+            try await OpenAIClient.shared.validate(apiKey: key)
+            KeychainStore.apiKey = key
+            apiKeyInput = ""
+            apiKeyStatus = .validated
+        } catch {
+            apiKeyStatus = .invalid(error.localizedDescription)
+        }
+    }
+
+    func removeAPIKey() {
+        KeychainStore.apiKey = nil
+        apiKeyStatus = .missing
+    }
+
+    // MARK: - Shortcut sync
+
+    /// Reads the current bindings from KeyboardShortcuts (the Recorder updates
+    /// them in place) and mirrors them into `draft` for display/persistence.
     private func syncShortcutsFromRecorder() {
         draft.shortcutPrivate  = shortcutString(for: .dictatePrivate)
         draft.shortcutBusiness = shortcutString(for: .dictateBusiness)
         draft.shortcutCalm     = shortcutString(for: .dictateCalm)
     }
 
-    /// Returns the current display string for a named shortcut, or "" if not set.
     private func shortcutString(for name: KeyboardShortcuts.Name) -> String {
         KeyboardShortcuts.getShortcut(for: name)?.description ?? ""
     }
