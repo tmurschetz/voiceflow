@@ -61,6 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showOnboardingWindow()
         }
 
+        // A rescued recording from a previous run survives the restart —
+        // surface it in the panel so the user can still retry it.
+        menuBarController?.refreshRescueState()
+
         Task { await permissionsManager.requestRequiredPermissions() }
     }
 
@@ -116,11 +120,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let audio else { return }
                 await updateMenuBarState(.processing)
 
-                // Transcribe with the user-selected model
+                // Transcribe with the user-selected model — retries transient
+                // failures with a visible countdown, like the rewrite stage.
                 let transcriptionResult = try await transcriptionService.transcribe(
                     audio: audio,
                     language: settings?.language ?? .autoDetect,
-                    model: settings?.transcribeModel ?? TranscribeModel.recommended.id
+                    model: settings?.transcribeModel ?? TranscribeModel.recommended.id,
+                    onRetry: { [weak self] event in
+                        self?.showRetryEvent(event)
+                    }
                 )
 
                 // Tone-of-voice rewrite — retries transient failures and falls
@@ -131,13 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     userInstruction: settings?.instruction(for: mode) ?? "",
                     textModel: settings?.textModel ?? TextModel.recommended.id,
                     onRetry: { [weak self] event in
-                        switch event {
-                        case .willRetryIn(let sec, let attempt, let total):
-                            self?.menuBarController?.update(
-                                state: .retrying(attempt: attempt, total: total, secondsRemaining: sec))
-                        case .retrying:
-                            self?.menuBarController?.update(state: .processing)
-                        }
+                        self?.showRetryEvent(event)
                     }
                 )
                 let processed = processingResult.text
@@ -177,12 +179,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if settings?.historyEnabled ?? true {
                     HistoryStore.shared.logFailed(mode: mode, errorMessage: error.localizedDescription)
                 }
-                await updateMenuBarState(.error(error.localizedDescription))
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
+
+                // RESCUE the recording instead of discarding it: move the audio
+                // into the rescue folder so the user can retry from the panel —
+                // a dictation must never be lost to a transient failure.
+                var message = error.localizedDescription
+                if let failedAudio = audio,
+                   RescueStore.shared.save(fileURL: failedAudio.fileURL, mode: mode) != nil {
+                    menuBarController?.refreshRescueState()
+                    message += " — Aufnahme gerettet, im Panel «Erneut versuchen»."
+                    audio = nil   // moved — nothing left to clean up
+                }
+
+                await updateMenuBarState(.error(message))
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
                 await updateMenuBarState(.idle)
             }
 
-            // Always clean up temp audio file
+            // Clean up the temp audio file (no-op when it was rescued)
             audio?.cleanup()
 
         } else {
@@ -200,6 +214,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await updateMenuBarState(.idle)
             }
+        }
+    }
+
+    // MARK: - Rescue retry
+
+    private var isRetryingRescue = false
+
+    /// Re-runs the pipeline for the most recent rescued (failed) recording.
+    /// Delivery goes to the clipboard: at retry time the original target app /
+    /// cursor position is long gone, so direct insertion would be guesswork.
+    private func retryRescuedDictation() async {
+        guard !isRetryingRescue, !recordingService.isRecording else { return }
+        guard let rescued = RescueStore.shared.latest else { return }
+        guard KeychainStore.hasAPIKey else {
+            await updateMenuBarState(.needsAPIKey)
+            showOnboardingWindow()
+            return
+        }
+        isRetryingRescue = true
+        defer { isRetryingRescue = false }
+
+        let settings = settingsService.currentSettings
+        await updateMenuBarState(.processing)
+
+        do {
+            let audio = RecordedAudio(fileURL: rescued.fileURL)
+            let transcriptionResult = try await transcriptionService.transcribe(
+                audio: audio,
+                language: settings?.language ?? .autoDetect,
+                model: settings?.transcribeModel ?? TranscribeModel.recommended.id,
+                onRetry: { [weak self] event in self?.showRetryEvent(event) }
+            )
+            let processingResult = try await modeProcessor.process(
+                text: transcriptionResult.transcript,
+                mode: rescued.mode,
+                userInstruction: settings?.instruction(for: rescued.mode) ?? "",
+                textModel: settings?.textModel ?? TextModel.recommended.id,
+                onRetry: { [weak self] event in self?.showRetryEvent(event) }
+            )
+
+            _ = try await outputService.output(text: processingResult.text, mode: .clipboardOnly)
+
+            if settings?.historyEnabled ?? true {
+                HistoryStore.shared.logCompleted(
+                    mode: rescued.mode,
+                    raw: transcriptionResult.transcript,
+                    final: processingResult.text,
+                    audioSeconds: nil,
+                    usedFallback: processingResult.usedFallback
+                )
+            }
+            menuBarController?.setLastDictation(processingResult.text)
+            RescueStore.shared.delete(rescued)
+            menuBarController?.refreshRescueState()
+
+            await updateMenuBarState(.successWithClipboard)
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            await updateMenuBarState(.idle)
+
+        } catch {
+            // Recording stays in the rescue store for another attempt.
+            await updateMenuBarState(.error(error.localizedDescription + " — Aufnahme bleibt gerettet."))
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            await updateMenuBarState(.idle)
+        }
+    }
+
+    /// Forwards retry countdowns from either pipeline stage to the menu bar.
+    private func showRetryEvent(_ event: PipelineRetryEvent) {
+        switch event {
+        case .willRetryIn(let sec, let attempt, let total):
+            menuBarController?.update(
+                state: .retrying(attempt: attempt, total: total, secondsRemaining: sec))
+        case .retrying:
+            menuBarController?.update(state: .processing)
         }
     }
 
@@ -300,4 +389,8 @@ extension AppDelegate: MenuBarControllerDelegate {
     }
 
     func menuBarDidRequestQuit() { NSApp.terminate(nil) }
+
+    func menuBarDidRequestRescueRetry() {
+        Task { await retryRescuedDictation() }
+    }
 }

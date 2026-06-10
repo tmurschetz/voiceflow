@@ -76,4 +76,7 @@ final class StatusPanelViewModel: ObservableObject {
     @Published var recordingSeconds: Int = 0
     /// Most recent dictation result — shown in the panel with a copy button.
     @Published var lastDictation: String?
+    /// Description of a rescued (failed) recording awaiting retry, e.g.
+    /// "Business · 14:32" — nil when there is nothing to retry.
+    @Published var rescuedDescription: String?
 }

@@ -111,10 +111,7 @@ final class ModeProcessor {
         let usedFallback: Bool
     }
 
-    enum RetryEvent: Sendable {
-        case willRetryIn(seconds: Int, attempt: Int, total: Int)
-        case retrying(attempt: Int, total: Int)
-    }
+    typealias RetryEvent = PipelineRetryEvent
 
     private static let maxAttempts = 2
     private static let retryDelaySeconds = 5
@@ -137,18 +134,26 @@ final class ModeProcessor {
 
         let systemPrompt = mode.systemPrompt(userInstruction: userInstruction)
 
+        // Predicted Outputs speed up editing tasks where output ≈ input
+        // (Privat/Business). Random with a custom instruction can transform the
+        // text arbitrarily (translate, restructure) — prediction would be
+        // rejected and only cost extra, so skip it there.
+        let predictOutput = !(mode == .random
+            && !userInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
         for attempt in 1...Self.maxAttempts {
             do {
                 let polished = try await client.chat(
                     systemPrompt: systemPrompt,
                     userText: text,
                     model: textModel,
-                    apiKey: apiKey
+                    apiKey: apiKey,
+                    predictOutput: predictOutput
                 )
                 return Result(text: polished, usedFallback: false)
 
             } catch {
-                let retryable = Self.isRetryable(error)
+                let retryable = OpenAIRetry.isRetryable(error)
                 NSLog("[ModeProcessor] Attempt %d failed: %@ (retryable=%@)",
                       attempt, String(describing: error), retryable ? "YES" : "NO")
 
@@ -175,31 +180,4 @@ final class ModeProcessor {
         return Result(text: text, usedFallback: true)
     }
 
-    // MARK: - Retry classification
-
-    private static func isRetryable(_ error: Error) -> Bool {
-        if let apiError = error as? OpenAIError {
-            switch apiError {
-            case .httpError(let code, _) where code == 429 || (500..<600).contains(code):
-                return true
-            case .invalidResponse, .emptyResult:
-                return true
-            default:
-                return false
-            }
-        }
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .timedOut, .cannotFindHost, .cannotConnectToHost,
-                 .networkConnectionLost, .notConnectedToInternet,
-                 .dnsLookupFailed, .resourceUnavailable, .badServerResponse,
-                 .secureConnectionFailed, .cannotLoadFromNetwork, .dataNotAllowed:
-                return true
-            default:
-                return false
-            }
-        }
-        if error is DecodingError { return true }
-        return false
-    }
 }

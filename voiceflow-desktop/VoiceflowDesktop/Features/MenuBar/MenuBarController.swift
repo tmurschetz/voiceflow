@@ -9,6 +9,7 @@ protocol MenuBarControllerDelegate: AnyObject {
     func menuBarDidRequestHistory()
     func menuBarDidRequestCheckForUpdates()
     func menuBarDidRequestQuit()
+    func menuBarDidRequestRescueRetry()
 }
 
 /// Owns the NSStatusItem (menu bar icon) and the popover panel.
@@ -73,6 +74,10 @@ final class MenuBarController {
             onQuit: { [weak self] in
                 self?.closePopover()
                 self?.delegate?.menuBarDidRequestQuit()
+            },
+            onRetryRescue: { [weak self] in
+                self?.closePopover()
+                self?.delegate?.menuBarDidRequestRescueRetry()
             }
         )
 
@@ -106,6 +111,19 @@ final class MenuBarController {
     /// Records the most recent dictation so the panel can show it with a copy button.
     func setLastDictation(_ text: String) {
         statusPanelVM.lastDictation = text
+    }
+
+    /// Syncs the "rescued recording" row in the panel with the RescueStore.
+    func refreshRescueState() {
+        if let rescued = RescueStore.shared.latest {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            statusPanelVM.rescuedDescription =
+                "\(rescued.mode.displayName) · \(formatter.string(from: rescued.date))"
+        } else {
+            statusPanelVM.rescuedDescription = nil
+        }
     }
 
     /// Called every second while recording to update the live timer.
