@@ -28,9 +28,16 @@ final class OutputService {
     // MARK: - Public API
 
     /// Outputs text according to the chosen mode.
+    /// - Parameters:
+    ///   - text: The text to output.
+    ///   - mode: `.insertIntoField` or `.clipboardOnly`.
+    ///   - targetPID: PID of the app that should receive the ⌘V keystroke.
+    ///     Capture this at the moment the user presses the shortcut (before async processing
+    ///     starts) so the paste lands in the right app even after several seconds of
+    ///     Whisper + Gemini processing. If `nil`, falls back to `.cgAnnotatedSessionEventTap`.
     /// - Returns: `true` if clipboard was used as the delivery mechanism.
     @discardableResult
-    func output(text: String, mode: OutputMode) async throws -> Bool {
+    func output(text: String, mode: OutputMode, targetPID: pid_t? = nil) async throws -> Bool {
         switch mode {
 
         case .clipboardOnly:
@@ -50,7 +57,7 @@ final class OutputService {
 
             // Strategy 2 — Clipboard + ⌘V (works in every app)
             copyToClipboard(text)
-            simulatePasteKeystroke()
+            simulatePasteKeystroke(targetPID: targetPID)
             return true   // clipboard was involved (paste simulation)
         }
     }
@@ -117,25 +124,57 @@ final class OutputService {
 
     // MARK: - Strategy 2: CGEventPost ⌘V
 
-    /// Posts a ⌘V keystroke to the active application.
+    /// Posts a ⌘V keystroke to the target application.
     ///
     /// The clipboard must be populated before this is called.
-    /// A 50 ms delay gives the target app time to notice the pasteboard change.
+    /// A 150 ms delay gives the pasteboard change time to propagate and allows
+    /// the target app to be ready to accept input.
     ///
     /// Virtual key 9 = V on all standard keyboard layouts (it is a hardware position
     /// code, not a character code, so it is layout-independent for ⌘V).
-    private func simulatePasteKeystroke() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+    ///
+    /// - Parameter targetPID: When non-nil and > 0, uses `CGEventPostToPid` to deliver
+    ///   the keystroke directly to the specific process regardless of which app is currently
+    ///   frontmost. This is essential because async processing (Whisper + Gemini) can take
+    ///   several seconds, during which the user may have briefly lost or changed focus.
+    ///   Falls back to `.cgAnnotatedSessionEventTap` (frontmost app) when nil.
+    private func simulatePasteKeystroke(targetPID: pid_t?) {
+        // Diagnostic snapshot at call time
+        let axTrusted = AXIsProcessTrusted()
+        let frontmostNow = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
+        NSLog("[VF-Paste] called. targetPID=%d frontmostNow=%d axTrusted=%@",
+              Int(targetPID ?? -1), Int(frontmostNow), axTrusted ? "YES" : "NO")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            // Re-activate the original target app so the keystroke lands there.
+            // This is essential when our menu bar app's status panel briefly
+            // stole focus, or when another app became frontmost during processing.
+            if let pid = targetPID, pid > 0,
+               let target = NSRunningApplication(processIdentifier: pid) {
+                let activated = target.activate()
+                NSLog("[VF-Paste] activate(target=%d) -> %@", Int(pid), activated ? "YES" : "NO")
+            }
+
             let source = CGEventSource(stateID: .hidSystemState)
             guard
                 let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
                 let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
-            else { return }
+            else {
+                NSLog("[VF-Paste] CGEvent creation FAILED")
+                return
+            }
             keyDown.flags = .maskCommand
             keyUp.flags   = .maskCommand
-            // .cgAnnotatedSessionEventTap targets the current frontmost application
-            keyDown.post(tap: .cgAnnotatedSessionEventTap)
-            keyUp.post(tap: .cgAnnotatedSessionEventTap)
+            if let pid = targetPID, pid > 0 {
+                // Deliver directly to the captured app's process.
+                keyDown.postToPid(pid)
+                keyUp.postToPid(pid)
+                NSLog("[VF-Paste] posted ⌘V to pid=%d", Int(pid))
+            } else {
+                keyDown.post(tap: .cgAnnotatedSessionEventTap)
+                keyUp.post(tap: .cgAnnotatedSessionEventTap)
+                NSLog("[VF-Paste] posted ⌘V to event tap (no pid)")
+            }
         }
     }
 }

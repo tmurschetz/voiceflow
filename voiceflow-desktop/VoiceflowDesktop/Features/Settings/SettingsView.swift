@@ -4,119 +4,289 @@ import AVFoundation
 import ApplicationServices
 import KeyboardShortcuts
 
-/// Full settings screen, opened from the menu bar.
+/// Full settings screen — modern macOS System-Settings style:
+/// grouped form, colored icon badges, instant auto-save (no Save button).
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
+    /// Window height — overridable so the snapshot harness can render the
+    /// whole form unscrolled for design review.
+    var height: CGFloat = 720
 
     var body: some View {
         VStack(spacing: 0) {
-            // Title bar area
-            HStack {
-                Text("Settings")
-                    .font(.title2.bold())
+            Form {
+                APIKeySection(viewModel: viewModel)
+                GeneralSection(viewModel: viewModel)
+                ModesSection(viewModel: viewModel)
+                ModelSection(viewModel: viewModel)
+                LanguageSection(viewModel: viewModel)
+                OutputSection(viewModel: viewModel)
+                PermissionsSection()
+                DataSection(viewModel: viewModel)
+            }
+            .formStyle(.grouped)
+
+            Divider()
+
+            // Slim footer: version + auto-save indicator
+            HStack(spacing: 8) {
+                Text("Voiceflow \(AppInfo.displayString)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .help("Build-Kennung — bitte bei Fehlermeldungen mit angeben.")
                 Spacer()
-                if viewModel.saveSuccess {
-                    Label("Saved", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.callout)
-                        .transition(.opacity)
-                }
-            }
-            .padding(20)
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    ShortcutsSection(viewModel: viewModel)
-                    Divider()
-                    LanguageSection(draft: $viewModel.draft)
-                    Divider()
-                    OutputSection(draft: $viewModel.draft)
-                    Divider()
-                    MicrophoneSection(draft: $viewModel.draft)
-                    Divider()
-                    PermissionsSection()
-                }
-                .padding(20)
-            }
-
-            Divider()
-
-            // Footer
-            HStack {
                 if let error = viewModel.validationError ?? viewModel.saveError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
                         .font(.caption)
-                        .lineLimit(2)
+                        .foregroundStyle(.orange)
+                        .lineLimit(1)
+                } else if viewModel.savedFlash {
+                    Label("Gespeichert", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                        .transition(.opacity)
+                } else {
+                    Text("Änderungen werden automatisch gespeichert")
+                        .font(.caption)
+                        .foregroundStyle(.quaternary)
                 }
-                Spacer()
-                Button("Reset to Defaults") { viewModel.resetToDefaults() }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                Button("Save") { Task { await viewModel.save() } }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!viewModel.canSave)
             }
+            .animation(.easeInOut(duration: 0.2), value: viewModel.savedFlash)
             .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .padding(.vertical, 10)
         }
-        .frame(width: 500, height: 540)
+        .frame(width: 580, height: height)
+        .onChange(of: viewModel.draft) { _ in viewModel.autoSave() }
     }
 }
 
-// MARK: - Section: Shortcuts
+// MARK: - Icon badge (System-Settings-style colored squircle)
 
-private struct ShortcutsSection: View {
+private struct IconBadge: View {
+    let systemName: String
+    let color: Color
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 24, height: 24)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(color.gradient)
+            )
+    }
+}
+
+// MARK: - Section: API Key
+
+private struct APIKeySection: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        SectionHeader(title: "Keyboard Shortcuts", subtitle: "Press the same shortcut again to stop recording.")
+        Section {
+            HStack(spacing: 10) {
+                IconBadge(systemName: "key.fill", color: statusColor)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("OpenAI API-Key")
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundStyle(statusColor == .green ? .green : .secondary)
+                }
+                Spacer()
+                if case .missing = viewModel.apiKeyStatus {} else {
+                    Button("Entfernen", role: .destructive) { viewModel.removeAPIKey() }
+                        .controlSize(.small)
+                }
+            }
 
-        VStack(spacing: 12) {
-            ShortcutRow(
-                label: "Private Mode",
-                description: "Minimal correction, original wording preserved",
-                name: .dictatePrivate
-            )
-            ShortcutRow(
-                label: "Business Mode",
-                description: "Professional, customer-facing tone",
-                name: .dictateBusiness
-            )
-            ShortcutRow(
-                label: "Calm Mode",
-                description: "De-escalated, respectful rewrite",
-                name: .dictateCalm
-            )
+            HStack(spacing: 8) {
+                SecureField(text: $viewModel.apiKeyInput, prompt: Text("Neuen Key einfügen (sk-…)")) {
+                    EmptyView()
+                }
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .font(.callout.monospaced())
+                Button {
+                    Task { await viewModel.saveAPIKey() }
+                } label: {
+                    if viewModel.isValidatingKey {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("Prüfen & speichern")
+                    }
+                }
+                .disabled(viewModel.apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isValidatingKey)
+            }
+
+            if case .invalid(let msg) = viewModel.apiKeyStatus {
+                Label(msg, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        } footer: {
+            HStack(spacing: 4) {
+                Text("Der Key bleibt im Schlüsselbund dieses Macs und geht ausschliesslich an api.openai.com.")
+                Button("Key erstellen ↗") {
+                    if let url = URL(string: Config.apiKeysURL) { NSWorkspace.shared.open(url) }
+                }
+                .buttonStyle(.link)
+            }
+            .font(.caption)
         }
+    }
 
-        if let error = viewModel.validationError {
-            Text(error)
-                .font(.caption)
-                .foregroundStyle(.orange)
+    private var statusText: String {
+        switch viewModel.apiKeyStatus {
+        case .missing:   return "Kein Key hinterlegt"
+        case .stored:    return "Hinterlegt (\(viewModel.maskedKey))"
+        case .validated: return "Geprüft & gespeichert (\(viewModel.maskedKey))"
+        case .invalid:   return "Ungültig"
+        }
+    }
+
+    private var statusColor: Color {
+        switch viewModel.apiKeyStatus {
+        case .missing:   return .orange
+        case .stored:    return .blue
+        case .validated: return .green
+        case .invalid:   return .red
         }
     }
 }
 
-private struct ShortcutRow: View {
-    let label: String
-    let description: String
-    let name: KeyboardShortcuts.Name
+// MARK: - Section: General
+
+private struct GeneralSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.callout)
-                    .fontWeight(.medium)
-                Text(description)
+        Section("Allgemein") {
+            HStack(spacing: 10) {
+                IconBadge(systemName: "power", color: .gray)
+                Toggle("Bei Anmeldung starten", isOn: $viewModel.launchAtLogin)
+            }
+        }
+    }
+}
+
+// MARK: - Section: Modes (shortcut + custom instruction per mode)
+
+private struct ModesSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
+    var body: some View {
+        Section {
+            ModeRow(
+                mode: .private, color: .blue,
+                name: .dictatePrivate,
+                instruction: $viewModel.draft.instructionPrivate,
+                placeholder: "z. B. «Behalte Anglizismen bei, schreibe Zahlen immer als Ziffern»",
+                onShortcutChange: { viewModel.autoSave() }
+            )
+            ModeRow(
+                mode: .business, color: .indigo,
+                name: .dictateBusiness,
+                instruction: $viewModel.draft.instructionBusiness,
+                placeholder: "z. B. «Unterschreibe nie, verwende unser Wording: Kundinnen und Kunden»",
+                onShortcutChange: { viewModel.autoSave() }
+            )
+            ModeRow(
+                mode: .random, color: .pink,
+                name: .dictateRandom,
+                instruction: $viewModel.draft.instructionRandom,
+                placeholder: "z. B. «Übersetze alles auf Englisch» oder «Formatiere als Bullet-Liste»",
+                onShortcutChange: { viewModel.autoSave() }
+            )
+        } header: {
+            Text("Modi")
+        } footer: {
+            Text("Gleicher Shortcut nochmals drücken stoppt die Aufnahme. Die Instruktion personalisiert den Output des jeweiligen Modus — sie wird der KI bei jedem Diktat mitgegeben.")
+                .font(.caption)
+        }
+    }
+}
+
+private struct ModeRow: View {
+    let mode: ProcessingMode
+    let color: Color
+    let name: KeyboardShortcuts.Name
+    @Binding var instruction: String
+    let placeholder: String
+    let onShortcutChange: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                IconBadge(systemName: mode.sfSymbol, color: color)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(mode.displayName)
+                    Text(mode.shortDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                KeyboardShortcuts.Recorder(for: name) { _ in onShortcutChange() }
+            }
+
+            TextField(text: $instruction, prompt: Text(placeholder), axis: .vertical) {
+                EmptyView()
+            }
+            .textFieldStyle(.roundedBorder)
+            .labelsHidden()
+            .font(.caption)
+            .lineLimit(2...4)
+            .padding(.leading, 34)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Section: Models
+
+private struct ModelSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    IconBadge(systemName: "waveform", color: .cyan)
+                    Picker("Transkription", selection: $viewModel.draft.transcribeModel) {
+                        ForEach(TranscribeModel.all) { model in
+                            Text(model.name).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                Text(TranscribeModel.byID(viewModel.draft.transcribeModel).guidance)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .padding(.leading, 34)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            KeyboardShortcuts.Recorder(for: name)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    IconBadge(systemName: "wand.and.stars", color: .purple)
+                    Picker("Text-Veredelung", selection: $viewModel.draft.textModel) {
+                        ForEach(TextModel.all) { model in
+                            Text(model.name).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                Text(TextModel.byID(viewModel.draft.textModel).guidance)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 34)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text("Modelle")
+        } footer: {
+            Text("Sprachen: Alle Modelle beherrschen Deutsch, Schweizerdeutsch und Englisch sehr gut. Für seltenere Sprachen (z. B. Rätoromanisch-nahe Idiome, Osteuropäisch, Asiatisch) ist Whisper mit 98 Sprachen die sicherste Wahl.")
+                .font(.caption)
         }
     }
 }
@@ -124,84 +294,68 @@ private struct ShortcutRow: View {
 // MARK: - Section: Language
 
 private struct LanguageSection: View {
-    @Binding var draft: AppSettings
+    @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        SectionHeader(title: "Language", subtitle: "Auto-detect works well for German and English.")
-
-        Toggle("Auto-detect language", isOn: $draft.autoDetectLanguage)
-
-        if !draft.autoDetectLanguage {
-            Picker("Language", selection: $draft.manualLanguageOverride) {
-                ForEach(SupportedLanguage.allCases) { lang in
-                    Text(lang.displayName).tag(lang)
-                }
+        Section {
+            HStack(spacing: 10) {
+                IconBadge(systemName: "globe", color: .purple)
+                Toggle("Sprache automatisch erkennen", isOn: $viewModel.draft.autoDetectLanguage)
             }
-            .pickerStyle(.menu)
-            .frame(maxWidth: 200)
-        }
-    }
-}
 
-// MARK: - Section: Output
-
-private struct OutputSection: View {
-    @Binding var draft: AppSettings
-
-    var body: some View {
-        SectionHeader(
-            title: "Output Mode",
-            subtitle: "Insert into field requires Accessibility permission."
-        )
-
-        ForEach(OutputMode.allCases) { mode in
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: draft.outputMode == mode ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(draft.outputMode == mode ? Color.accentColor : .secondary)
-                    .font(.system(size: 16))
-                    .onTapGesture { draft.outputMode = mode }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(mode.displayName)
-                        .font(.callout)
-                    if mode == .insertIntoField {
-                        Text("Falls back to clipboard if Accessibility is not granted.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            if !viewModel.draft.autoDetectLanguage {
+                Picker("Sprache", selection: $viewModel.draft.manualLanguageOverride) {
+                    ForEach(SupportedLanguage.allCases) { lang in
+                        Text(lang.displayName).tag(lang)
                     }
                 }
+                .pickerStyle(.menu)
             }
+        } header: {
+            Text("Sprache")
+        } footer: {
+            Text("Auto-detect erkennt die gesprochene Sprache automatisch. Manuell festlegen lohnt sich nur, wenn die Erkennung danebenliegt.")
+                .font(.caption)
         }
     }
 }
 
-// MARK: - Section: Microphone
+// MARK: - Section: Output + Microphone
 
-private struct MicrophoneSection: View {
-    @Binding var draft: AppSettings
+private struct OutputSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
     @State private var devices: [(id: String, name: String)] = []
 
     var body: some View {
-        SectionHeader(title: "Microphone", subtitle: "Default uses the system input device.")
+        Section {
+            HStack(spacing: 10) {
+                IconBadge(systemName: "text.cursor", color: .orange)
+                Picker("Ausgabe", selection: $viewModel.draft.outputMode) {
+                    ForEach(OutputMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
 
-        Group {
-            if devices.isEmpty {
-                Text("No additional input devices found.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Picker("Input device", selection: Binding(
-                    get: { draft.microphoneDevice ?? "" },
-                    set: { draft.microphoneDevice = $0.isEmpty ? nil : $0 }
+            HStack(spacing: 10) {
+                IconBadge(systemName: "mic.fill", color: .pink)
+                Picker("Mikrofon", selection: Binding(
+                    get: { viewModel.draft.microphoneDevice ?? "" },
+                    set: { viewModel.draft.microphoneDevice = $0.isEmpty ? nil : $0 }
                 )) {
-                    Text("System default").tag("")
+                    Text("System-Standard").tag("")
                     ForEach(devices, id: \.id) { device in
                         Text(device.name).tag(device.id)
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(maxWidth: 280)
             }
+        } header: {
+            Text("Ausgabe & Eingabe")
+        } footer: {
+            Text("Direktes Einfügen fällt auf die Zwischenablage zurück, wenn die Bedienungshilfen-Berechtigung fehlt.")
+                .font(.caption)
         }
         .onAppear { devices = RecordingService.availableInputDevices() }
     }
@@ -212,88 +366,126 @@ private struct MicrophoneSection: View {
 private struct PermissionsSection: View {
     @State private var hasMic = false
     @State private var hasAX  = false
+    @State private var pollTimer: Timer? = nil
 
     var body: some View {
-        SectionHeader(
-            title: "Permissions",
-            subtitle: "Microphone is required. Accessibility enables direct text insertion."
-        )
-
-        VStack(spacing: 8) {
+        Section("Berechtigungen") {
             PermissionRow(
-                icon: "mic.fill",
-                label: "Microphone",
-                note: "Required — to record your speech",
+                icon: "mic.fill", color: .red,
+                label: "Mikrofon",
+                note: "Erforderlich — zeichnet deine Sprache auf",
                 granted: hasMic,
                 settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
             )
             PermissionRow(
-                icon: "keyboard",
-                label: "Accessibility",
-                note: "Optional — enables direct text insertion (falls back to clipboard)",
+                icon: "accessibility", color: .blue,
+                label: "Bedienungshilfen",
+                note: "Optional — fügt Text direkt ein (sonst Zwischenablage)",
                 granted: hasAX,
                 settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
             )
         }
         .onAppear {
-            hasMic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-            hasAX  = AXIsProcessTrusted()
+            refreshStatus()
+            pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+                refreshStatus()
+            }
         }
+        .onDisappear {
+            pollTimer?.invalidate()
+            pollTimer = nil
+        }
+    }
+
+    private func refreshStatus() {
+        hasMic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        hasAX  = AXIsProcessTrusted()
     }
 }
 
 private struct PermissionRow: View {
     let icon: String
+    let color: Color
     let label: String
     let note: String
     let granted: Bool
     let settingsURL: String
 
     var body: some View {
-        HStack(alignment: .top) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-                .padding(.top, 1)
+        HStack(spacing: 10) {
+            IconBadge(systemName: icon, color: granted ? .green : color)
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
-                    .font(.callout)
                 Text(note)
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             if granted {
-                Label("Granted", systemImage: "checkmark.circle.fill")
+                Label("Erteilt", systemImage: "checkmark.circle.fill")
+                    .labelStyle(.titleAndIcon)
                     .foregroundStyle(.green)
                     .font(.caption)
             } else {
-                Button("Grant Access") {
-                    if let url = URL(string: settingsURL) {
-                        NSWorkspace.shared.open(url)
-                    }
+                Button("Erlauben") {
+                    if let url = URL(string: settingsURL) { NSWorkspace.shared.open(url) }
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.small)
             }
         }
     }
 }
 
-// MARK: - Reusable Section Header
+// MARK: - Section: Data & Uninstall
 
-private struct SectionHeader: View {
-    let title: String
-    let subtitle: String
+private struct DataSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var historyCleared = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.callout.bold())
-            Text(subtitle)
+        Section {
+            HStack(spacing: 10) {
+                IconBadge(systemName: "clock.arrow.circlepath", color: .teal)
+                Toggle("Diktat-Verlauf lokal speichern", isOn: $viewModel.draft.historyEnabled)
+            }
+
+            HStack(spacing: 10) {
+                IconBadge(systemName: "trash", color: .gray)
+                Text("Verlauf löschen")
+                Spacer()
+                if historyCleared {
+                    Label("Gelöscht", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                } else {
+                    Button("Löschen") {
+                        HistoryStore.shared.clear()
+                        historyCleared = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { historyCleared = false }
+                    }
+                    .controlSize(.small)
+                }
+            }
+
+            HStack(spacing: 10) {
+                IconBadge(systemName: "xmark.bin.fill", color: .red)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("App vollständig entfernen")
+                    Text("Key, Einstellungen, Verlauf, Berechtigungen und die App selbst — ohne Spuren.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Entfernen…", role: .destructive) {
+                    Uninstaller.requestUninstall()
+                }
+                .controlSize(.small)
+            }
+        } header: {
+            Text("Daten & Deinstallation")
+        } footer: {
+            Text("Der Verlauf liegt ausschliesslich lokal unter ~/Library/Application Support/Voiceflow/ und verlässt deinen Mac nie.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 }
-

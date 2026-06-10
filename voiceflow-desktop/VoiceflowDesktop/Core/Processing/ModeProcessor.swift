@@ -2,154 +2,204 @@ import Foundation
 
 // MARK: - ProcessingMode
 
-/// The three dictation modes.
+/// The three dictation modes. Each can be personalised with a free-text
+/// instruction from Settings (AppSettings.instruction(for:)).
 enum ProcessingMode: String, CaseIterable {
     case `private` = "private"
     case business  = "business"
-    case calm      = "calm"
+    case random    = "random"
 
     var displayName: String {
         switch self {
-        case .private:  return "Private"
+        case .private:  return "Privat"
         case .business: return "Business"
-        case .calm:     return "Calm"
+        case .random:   return "Random"
         }
     }
 
-    /// System prompt sent to the AI model via the backend edge function.
-    /// Reference documentation of what each server-side prompt does.
-    /// The actual prompts live in the Supabase edge function (process-transcription).
-    /// These are kept here as spec documentation only — not sent in API requests.
-    var systemPromptDocumentation: String {
+    var shortDescription: String {
+        switch self {
+        case .private:  return "Leichte Korrektur — dein Wortlaut bleibt"
+        case .business: return "Professioneller, geschäftstauglicher Ton"
+        case .random:   return "Deine Regeln — ganz nach deiner Instruktion"
+        }
+    }
+
+    var sfSymbol: String {
+        switch self {
+        case .private:  return "person.fill"
+        case .business: return "briefcase.fill"
+        case .random:   return "sparkles"
+        }
+    }
+
+    /// Builds the full system prompt for this mode, including the user's
+    /// custom instruction when present.
+    func systemPrompt(userInstruction: String) -> String {
+        let shared = """
+        Universal rules (always apply, highest priority):
+        - Respond ONLY with the transformed text. No explanations, no quotes, no preamble.
+        - Mirror the input language. German or Swiss German dialect input → output in Swiss \
+        Standard German (Schweizer Hochdeutsch): always use "ss" instead of "ß", Swiss \
+        vocabulary and phrasing. Never output dialect spelling. English input → English output.
+        - Mirror the speaker's register: if they use du/dich/dir/dein, keep Du-form; if they \
+        use Sie/Ihnen, keep Sie-form; if unclear, use Sie-form (German) or neutral (English).
+        - Apply self-corrections: when the speaker corrects themselves mid-sentence \
+        ("am Montag — nein, am Dienstag"), keep only the corrected version.
+        - Remove filler words (ähm, äh, halt, quasi, sozusagen, um, uh, like, you know).
+        - Never add anything that was not said: no salutations, no closings, no subject \
+        lines, no extra sentences — unless the user's custom instruction explicitly asks for it.
+        - Format numbers, dates, e-mail addresses and URLs properly.
+        """
+
+        let base: String
         switch self {
         case .private:
-            return "Minimal correction: punctuation, capitalisation, paragraph breaks. Exact wording preserved."
+            base = """
+            You are a transcription editor for a dictation tool. Lightly clean up the spoken \
+            input: fix punctuation, capitalisation and obvious transcription errors, apply \
+            self-corrections, remove fillers. Do NOT rewrite, restructure or change the \
+            meaning, vocabulary or tone of what was said.
+            """
         case .business:
-            return "Professional rewrite: customer-facing tone, clear and concise, suitable for external comms."
-        case .calm:
-            return "De-escalation rewrite: removes aggression/sarcasm, keeps core message, calm and respectful."
+            base = """
+            You are a professional writing editor for a dictation tool. Rewrite the spoken \
+            input in a polished, professional register — direct and concise, Swiss business \
+            style, no flowery phrasing. Keep the same format and roughly the same length as \
+            what was said. Fix grammar, tighten phrasing, remove fillers — but do not add \
+            new content or change the meaning.
+            """
+        case .random:
+            base = """
+            You are a flexible text transformer for a dictation tool. Your behaviour is \
+            defined primarily by the user's custom instruction below. If no custom \
+            instruction is given, apply a light cleanup only (punctuation, fillers, \
+            self-corrections) and keep the speaker's wording.
+            """
         }
+
+        let instruction = userInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let personalisation = instruction.isEmpty ? "" : """
+
+
+        User's custom instruction for this mode (apply it faithfully; it overrides style \
+        defaults but never the universal rules):
+        «\(instruction)»
+        """
+
+        return base + "\n\n" + shared + personalisation
     }
 }
 
 // MARK: - ModeProcessor
 
-/// Sends the raw transcript to the Supabase edge function for mode-specific AI processing.
+/// Applies the tone-of-voice transformation by calling the OpenAI chat API directly
+/// with the user's own key. No app backend involved.
 ///
-/// Edge function contract (POST /functions/v1/process-transcription):
-///
-///   Request body (Lovable-deployed schema, verified 2026-04-21):
-///     {
-///       "transcript": String,  // raw transcript text
-///       "mode":       String,  // "private" | "business" | "calm"
-///       "language":   String   // locale used, e.g. "de", "en"
-///     }
-///
-///   Success response (200):
-///     { "transformed_text": String, "mode": String }
-///
-///   Error response:
-///     { "error": { "formErrors": [], "fieldErrors": { ... } } }
-///
-/// Fallback behaviour:
-///   - If the edge function returns 404 (not deployed) or 503 (unavailable),
-///     the raw transcript is returned unchanged. The pipeline still succeeds.
-///   - For all other HTTP errors, the error is surfaced.
+/// Resilience: transient failures (429/5xx, timeouts, connection loss) are retried
+/// once after a visible 5-second countdown; if all attempts fail, the raw transcript
+/// is returned so the user never loses a dictation.
 final class ModeProcessor {
 
-    private let api = APIClient.shared
+    private let client = OpenAIClient.shared
+
+    // MARK: - Result / events
+
+    struct Result {
+        let text: String
+        /// True when all retries failed and we returned the raw transcript instead.
+        let usedFallback: Bool
+    }
+
+    enum RetryEvent: Sendable {
+        case willRetryIn(seconds: Int, attempt: Int, total: Int)
+        case retrying(attempt: Int, total: Int)
+    }
+
+    private static let maxAttempts = 2
+    private static let retryDelaySeconds = 5
 
     // MARK: - Process
 
     func process(
         text: String,
         mode: ProcessingMode,
-        language: String,
-        session: SupabaseSession
-    ) async throws -> String {
+        userInstruction: String,
+        textModel: String,
+        onRetry: (@MainActor @Sendable (RetryEvent) async -> Void)? = nil
+    ) async throws -> Result {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return text
+            return Result(text: text, usedFallback: false)
+        }
+        guard let apiKey = KeychainStore.apiKey else {
+            throw OpenAIError.missingAPIKey
         }
 
-        // Request body uses "transcript" (not "text") per Lovable edge function Zod schema
-        struct RequestBody: Encodable {
-            let transcript: String
-            let mode: String
-            let language: String
-        }
+        let systemPrompt = mode.systemPrompt(userInstruction: userInstruction)
 
-        // Response uses "transformed_text" (not "result") per Lovable edge function
-        struct ResponseBody: Decodable {
-            let transformedText: String?
-            let error: String?
-            // CodingKeys not needed — JSONDecoder.supabase uses convertFromSnakeCase
-        }
+        for attempt in 1...Self.maxAttempts {
+            do {
+                let polished = try await client.chat(
+                    systemPrompt: systemPrompt,
+                    userText: text,
+                    model: textModel,
+                    apiKey: apiKey
+                )
+                return Result(text: polished, usedFallback: false)
 
-        let body = RequestBody(
-            transcript: text,
-            mode: mode.rawValue,
-            language: language
-        )
+            } catch {
+                let retryable = Self.isRetryable(error)
+                NSLog("[ModeProcessor] Attempt %d failed: %@ (retryable=%@)",
+                      attempt, String(describing: error), retryable ? "YES" : "NO")
 
-        let req = try api.request(
-            path: Endpoints.processTranscription,
-            method: "POST",
-            body: body,
-            authToken: session.accessToken
-        )
-
-        do {
-            let response = try await api.perform(req, as: ResponseBody.self)
-
-            if let error = response.error {
-                throw ProcessingError.edgeFunctionError(error)
+                if retryable, attempt < Self.maxAttempts {
+                    if let onRetry {
+                        for sec in stride(from: Self.retryDelaySeconds, through: 1, by: -1) {
+                            await onRetry(.willRetryIn(seconds: sec, attempt: attempt, total: Self.maxAttempts))
+                            try? await Task.sleep(nanoseconds: 1_000_000_000)
+                        }
+                        await onRetry(.retrying(attempt: attempt + 1, total: Self.maxAttempts))
+                    } else {
+                        try? await Task.sleep(nanoseconds: UInt64(Self.retryDelaySeconds) * 1_000_000_000)
+                    }
+                    continue
+                }
+                if retryable {
+                    NSLog("[ModeProcessor] All %d attempts failed. Returning raw transcript.", Self.maxAttempts)
+                    return Result(text: text, usedFallback: true)
+                }
+                throw error
             }
-            guard let result = response.transformedText, !result.isEmpty else {
-                throw ProcessingError.emptyResult
-            }
-            return result
+        }
 
-        } catch let apiError as APIError {
+        return Result(text: text, usedFallback: true)
+    }
+
+    // MARK: - Retry classification
+
+    private static func isRetryable(_ error: Error) -> Bool {
+        if let apiError = error as? OpenAIError {
             switch apiError {
-            case .httpError(404, _), .httpError(503, _):
-                // Edge function not deployed or temporarily unavailable.
-                // Fall back to raw transcript so the app remains usable.
-                #if DEBUG
-                print("[ModeProcessor] Edge function unavailable (\(apiError)). Returning raw transcript.")
-                #endif
-                return text
+            case .httpError(let code, _) where code == 429 || (500..<600).contains(code):
+                return true
+            case .invalidResponse, .emptyResult:
+                return true
             default:
-                throw ProcessingError.networkError(apiError)
+                return false
             }
         }
-    }
-
-    // MARK: - Legacy overload (keeps AppDelegate compatible during migration)
-
-    func process(
-        text: String,
-        mode: ProcessingMode,
-        session: SupabaseSession
-    ) async throws -> String {
-        try await process(text: text, mode: mode, language: "auto", session: session)
-    }
-}
-
-// MARK: - Errors
-
-enum ProcessingError: LocalizedError {
-    case emptyResult
-    case edgeFunctionError(String)
-    case networkError(Error)
-
-    var errorDescription: String? {
-        switch self {
-        case .emptyResult:
-            return "The AI processing returned an empty result."
-        case .edgeFunctionError(let msg):
-            return "Processing error: \(msg)"
-        case .networkError(let e):
-            return "Processing network error: \(e.localizedDescription)"
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .cannotFindHost, .cannotConnectToHost,
+                 .networkConnectionLost, .notConnectedToInternet,
+                 .dnsLookupFailed, .resourceUnavailable, .badServerResponse,
+                 .secureConnectionFailed, .cannotLoadFromNetwork, .dataNotAllowed:
+                return true
+            default:
+                return false
+            }
         }
+        if error is DecodingError { return true }
+        return false
     }
 }

@@ -17,8 +17,8 @@ packages:
 settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: com.voiceflow.desktop
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "8"
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
     CODE_SIGN_STYLE: Automatic
@@ -37,8 +37,20 @@ targets:
         excludes:
           - Resources/Info.plist
           - Resources/VoiceflowDesktop.entitlements
+          - Resources/AppIcon.icns
+          - Resources/MenuBarIcon.png
+          - Resources/MenuBarIcon@2x.png
+          - Resources/MenuBarIcon@3x.png
     resources:
       - VoiceflowDesktop/Resources/Info.plist
+      - path: VoiceflowDesktop/Resources/AppIcon.icns
+        optional: true
+      - path: VoiceflowDesktop/Resources/MenuBarIcon.png
+        optional: true
+      - path: VoiceflowDesktop/Resources/MenuBarIcon@2x.png
+        optional: true
+      - path: VoiceflowDesktop/Resources/MenuBarIcon@3x.png
+        optional: true
     dependencies:
       - package: KeyboardShortcuts
       - sdk: CoreAudio.framework    # AudioDeviceID, AudioObjectGetPropertyData

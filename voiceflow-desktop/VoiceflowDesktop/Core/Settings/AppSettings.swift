@@ -1,52 +1,50 @@
 import Foundation
 
-/// The full set of user-configurable settings.
-/// Persisted in `user_settings` table; cached locally in UserDefaults for fast startup.
+/// The full set of user-configurable settings. Persisted locally in UserDefaults.
 ///
-/// Schema: user_settings (confirmed columns)
-///   shortcut_private (text, default '')
-///   shortcut_business (text, default '')
-///   shortcut_calm (text, default '')
-///   auto_detect_language (boolean, default true)
-///   manual_language_override (text, nullable)
-///   output_mode (text, default 'replace')   ← DB uses 'replace', not 'insert_into_field'
-///   microphone_device (text, nullable)       ← NOT microphone_device_id
-///   auto_insert (boolean, default true)
-///   default_language (text, default 'auto')
-///   default_mode (text, default 'clean')
+/// Decoding is tolerant: every field falls back to its default when missing, so
+/// settings survive app updates that add new fields (and the 0.3.x rename of
+/// the third mode from "calm" to "random").
 struct AppSettings: Codable, Equatable {
 
-    // MARK: - Shortcuts
-    // Empty string means "not configured". Stored as-is in the DB.
+    // MARK: - Shortcuts (display strings; bindings live in KeyboardShortcuts)
 
     var shortcutPrivate:  String = ""
     var shortcutBusiness: String = ""
-    var shortcutCalm:     String = ""
+    var shortcutRandom:   String = ""
+
+    // MARK: - Per-mode custom instructions
+    // Free-text personalisation appended to the mode's system prompt.
+
+    var instructionPrivate:  String = ""
+    var instructionBusiness: String = ""
+    var instructionRandom:   String = ""
+
+    // MARK: - Models
+
+    /// Transcription model ID (see TranscribeModel for the catalogue).
+    var transcribeModel: String = TranscribeModel.recommended.id
+    /// Text model ID for tone-of-voice rewriting (see TextModel).
+    var textModel: String = TextModel.recommended.id
 
     // MARK: - Language
 
     var autoDetectLanguage: Bool = true
     var manualLanguageOverride: SupportedLanguage = .german
-    /// DB column: default_language. Fallback/hint language stored in DB.
-    var defaultLanguage: String = "auto"
 
     // MARK: - Output
 
-    /// Maps to output_mode in DB. Use .dbValue to get the DB string.
     var outputMode: OutputMode = .insertIntoField
-    /// DB column: auto_insert. Whether to auto-insert without confirmation.
-    var autoInsert: Bool = true
-
-    // MARK: - Mode
-
-    /// DB column: default_mode. Default processing mode (e.g. 'clean').
-    /// Kept as raw string to round-trip DB values faithfully.
-    var defaultMode: String = "clean"
 
     // MARK: - Microphone
 
-    /// DB column: microphone_device (nullable). nil = system default.
+    /// nil = system default input device.
     var microphoneDevice: String? = nil
+
+    // MARK: - Privacy
+
+    /// When false, dictations are not written to the local history file.
+    var historyEnabled: Bool = true
 
     // MARK: - Derived
 
@@ -54,25 +52,117 @@ struct AppSettings: Codable, Equatable {
         autoDetectLanguage ? .autoDetect : .manual(manualLanguageOverride)
     }
 
+    /// Custom instruction for a given mode.
+    func instruction(for mode: ProcessingMode) -> String {
+        switch mode {
+        case .private:  return instructionPrivate
+        case .business: return instructionBusiness
+        case .random:   return instructionRandom
+        }
+    }
+
     // MARK: - Validation
 
-    /// Validates that no two non-empty shortcuts have the same value.
-    /// Empty strings are valid (means "not configured").
     var shortcutsAreValid: Bool {
-        let nonEmpty = [shortcutPrivate, shortcutBusiness, shortcutCalm]
+        let nonEmpty = [shortcutPrivate, shortcutBusiness, shortcutRandom]
             .filter { !$0.isEmpty }
         return nonEmpty.count == Set(nonEmpty).count
     }
 
-    /// Human-readable description of the validation error, if any.
     var shortcutValidationError: String? {
-        shortcutsAreValid ? nil : "Two or more shortcuts are identical. Each must be unique."
+        shortcutsAreValid ? nil : "Zwei oder mehr Shortcuts sind identisch. Jeder muss eindeutig sein."
     }
 
-    /// True when no shortcuts have been configured yet (all three are empty).
-    /// Used to show a first-run prompt in the status panel.
     var shortcutsAreAllEmpty: Bool {
-        shortcutPrivate.isEmpty && shortcutBusiness.isEmpty && shortcutCalm.isEmpty
+        shortcutPrivate.isEmpty && shortcutBusiness.isEmpty && shortcutRandom.isEmpty
+    }
+
+    // MARK: - Tolerant decoding
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        shortcutPrivate  = try c.decodeIfPresent(String.self, forKey: .shortcutPrivate)  ?? ""
+        shortcutBusiness = try c.decodeIfPresent(String.self, forKey: .shortcutBusiness) ?? ""
+        // 0.3.x migration: the third mode was renamed calm → random.
+        shortcutRandom = try c.decodeIfPresent(String.self, forKey: .shortcutRandom)
+            ?? (try? Self.legacyCalmShortcut(decoder)) ?? ""
+        instructionPrivate  = try c.decodeIfPresent(String.self, forKey: .instructionPrivate)  ?? ""
+        instructionBusiness = try c.decodeIfPresent(String.self, forKey: .instructionBusiness) ?? ""
+        instructionRandom   = try c.decodeIfPresent(String.self, forKey: .instructionRandom)   ?? ""
+        transcribeModel = try c.decodeIfPresent(String.self, forKey: .transcribeModel) ?? TranscribeModel.recommended.id
+        textModel       = try c.decodeIfPresent(String.self, forKey: .textModel)       ?? TextModel.recommended.id
+        autoDetectLanguage = try c.decodeIfPresent(Bool.self, forKey: .autoDetectLanguage) ?? true
+        manualLanguageOverride = try c.decodeIfPresent(SupportedLanguage.self, forKey: .manualLanguageOverride) ?? .german
+        outputMode = try c.decodeIfPresent(OutputMode.self, forKey: .outputMode) ?? .insertIntoField
+        microphoneDevice = try c.decodeIfPresent(String.self, forKey: .microphoneDevice)
+        historyEnabled = try c.decodeIfPresent(Bool.self, forKey: .historyEnabled) ?? true
+    }
+
+    private static func legacyCalmShortcut(_ decoder: Decoder) throws -> String {
+        struct Legacy: Decodable { let shortcutCalm: String? }
+        return try Legacy(from: decoder).shortcutCalm ?? ""
+    }
+}
+
+// MARK: - Model catalogues (shown in Settings with guidance)
+
+/// Transcription models the user can choose from, with plain-language guidance.
+struct TranscribeModel: Identifiable, Equatable {
+    let id: String
+    let name: String
+    /// One-line recommendation shown under the picker.
+    let guidance: String
+
+    static let all: [TranscribeModel] = [
+        TranscribeModel(
+            id: "gpt-4o-mini-transcribe",
+            name: "GPT-4o mini Transcribe — empfohlen",
+            guidance: "Am schnellsten und am günstigsten (≈ 0.3 Rp./Min). Sehr gute Qualität für Deutsch, Schweizerdeutsch und Englisch — die richtige Wahl für den Alltag."
+        ),
+        TranscribeModel(
+            id: "gpt-4o-transcribe",
+            name: "GPT-4o Transcribe — höchste Genauigkeit",
+            guidance: "≈ 22 % weniger Erkennungsfehler als Whisper, doppelter Preis (≈ 0.6 Rp./Min). Lohnt sich bei schwieriger Audioqualität, starkem Dialekt oder vielen Fachbegriffen."
+        ),
+        TranscribeModel(
+            id: "whisper-1",
+            name: "Whisper — breiteste Sprachabdeckung",
+            guidance: "Der bewährte Klassiker mit 98 unterstützten Sprachen (≈ 0.6 Rp./Min) — die beste Wahl für seltenere Sprachen. Etwas langsamer als die GPT-4o-Modelle."
+        )
+    ]
+
+    static let recommended = all[0]
+
+    static func byID(_ id: String) -> TranscribeModel {
+        all.first { $0.id == id } ?? recommended
+    }
+}
+
+/// Text models for the tone-of-voice rewrite step.
+struct TextModel: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let guidance: String
+
+    static let all: [TextModel] = [
+        TextModel(
+            id: "gpt-4o-mini",
+            name: "GPT-4o mini — empfohlen",
+            guidance: "Sehr schnell und sehr günstig — für Diktat-Bereinigung mehr als ausreichend."
+        ),
+        TextModel(
+            id: "gpt-4o",
+            name: "GPT-4o — beste Schreibqualität",
+            guidance: "Feineres Sprachgefühl für anspruchsvolle Business-Texte. Spürbar teurer und etwas langsamer — für kurze Diktate selten nötig."
+        )
+    ]
+
+    static let recommended = all[0]
+
+    static func byID(_ id: String) -> TextModel {
+        all.first { $0.id == id } ?? recommended
     }
 }
 
@@ -87,16 +177,14 @@ enum SupportedLanguage: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .german:      return "German"
-        case .english:     return "English"
-        case .swissGerman: return "Swiss German"
+        case .german:      return "Schweizer Hochdeutsch"
+        case .english:     return "Englisch"
+        case .swissGerman: return "Schweizerdeutsch (Dialekt)"
         }
     }
 
-    /// ISO 639-1 code passed to OpenAI Whisper API.
-    /// Swiss German uses "de" — Whisper understands Swiss dialect under the German code
-    /// because it was trained on diverse real-world audio including Swiss speakers.
-    /// Omit entirely for auto-detect (handled in TranscriptionService).
+    /// ISO 639-1 code passed to the transcription API.
+    /// Swiss German dialect is transcribed under "de".
     var whisperCode: String {
         switch self {
         case .german:      return "de"
@@ -109,23 +197,10 @@ enum SupportedLanguage: String, Codable, CaseIterable, Identifiable {
 enum LanguageSelection: Equatable {
     case autoDetect
     case manual(SupportedLanguage)
-
-    var apiValue: String {
-        switch self {
-        case .autoDetect:       return "auto"
-        case .manual(let lang): return lang.rawValue
-        }
-    }
 }
 
 // MARK: - OutputMode
 
-/// The output behaviour after processing.
-///
-/// DB ↔ App mapping (output_mode column):
-///   'replace'   ↔ .insertIntoField   (default)
-///   'clipboard' ↔ .clipboardOnly
-///   Any unknown value → .insertIntoField (safe default)
 enum OutputMode: String, Codable, CaseIterable, Identifiable {
     /// Insert text into the active field via Accessibility API. Falls back to clipboard.
     case insertIntoField = "insert_into_field"
@@ -134,35 +209,10 @@ enum OutputMode: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// The value stored in the DB output_mode column.
-    var dbValue: String {
-        switch self {
-        case .insertIntoField: return "replace"
-        case .clipboardOnly:   return "clipboard"
-        }
-    }
-
     var displayName: String {
         switch self {
-        case .insertIntoField: return "Insert into active text field"
-        case .clipboardOnly:   return "Copy to clipboard only"
+        case .insertIntoField: return "In aktives Textfeld einfügen"
+        case .clipboardOnly:   return "Nur in die Zwischenablage"
         }
     }
-
-    /// Parse from a DB output_mode string.
-    static func fromDBValue(_ raw: String) -> OutputMode {
-        switch raw.lowercased() {
-        case "replace", "insert", "insert_into_field": return .insertIntoField
-        case "clipboard", "clipboard_only":            return .clipboardOnly
-        default:                                       return .insertIntoField
-        }
-    }
-}
-
-// MARK: - KeyComboRecord (for KeyboardShortcuts integration)
-
-/// Lightweight record of a key combination string stored in the DB.
-struct KeyComboRecord: Codable, Equatable, Hashable {
-    let rawValue: String
-    init(_ rawValue: String) { self.rawValue = rawValue }
 }

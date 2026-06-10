@@ -1,86 +1,130 @@
 import Foundation
 import SwiftUI
 import KeyboardShortcuts
+import ServiceManagement
 
 @MainActor
 final class SettingsViewModel: ObservableObject {
 
-    /// Working copy — only committed to backend when user presses Save.
+    /// Working copy — auto-saved on every change (no Save button, System-Settings style).
     @Published var draft: AppSettings
 
-    @Published var isSaving:     Bool   = false
-    @Published var saveError:    String? = nil
-    @Published var saveSuccess:  Bool   = false
+    /// Brief "Gespeichert" flash after an auto-save.
+    @Published var savedFlash: Bool = false
+    @Published var saveError: String? = nil
+
+    // MARK: - Launch at login (SMAppService, macOS 13+)
+
+    @Published var launchAtLogin: Bool {
+        didSet {
+            guard oldValue != launchAtLogin else { return }
+            do {
+                if launchAtLogin {
+                    try SMAppService.mainApp.register()
+                } else {
+                    try SMAppService.mainApp.unregister()
+                }
+            } catch {
+                NSLog("[Settings] Launch-at-login toggle failed: %@", String(describing: error))
+                // Revert UI to the actual state
+                launchAtLogin = SMAppService.mainApp.status == .enabled
+            }
+        }
+    }
+
+    // MARK: - API key management
+
+    /// New key the user typed (empty = no change).
+    @Published var apiKeyInput: String = ""
+    @Published var apiKeyStatus: APIKeyStatus = KeychainStore.hasAPIKey ? .stored : .missing
+    @Published var isValidatingKey = false
+
+    enum APIKeyStatus: Equatable {
+        case missing
+        case stored
+        case validated
+        case invalid(String)
+    }
 
     private let settingsService: SettingsService
-    private let session:         SupabaseSession
+    private var flashTask: Task<Void, Never>?
 
-    init(settingsService: SettingsService, session: SupabaseSession) {
+    init(settingsService: SettingsService) {
         self.settingsService = settingsService
-        self.session         = session
-        self.draft           = settingsService.currentSettings ?? AppSettings()
+        self.draft = settingsService.currentSettings ?? AppSettings()
+        self.launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
     // MARK: - Validation
 
     var validationError: String? { draft.shortcutValidationError }
 
-    var canSave: Bool { validationError == nil && !isSaving }
+    var maskedKey: String { KeychainStore.maskedKey }
 
-    // MARK: - Save
+    // MARK: - Auto-save
 
-    func save() async {
-        guard canSave else { return }
-        isSaving     = true
-        saveError    = nil
-        saveSuccess  = false
-        defer { isSaving = false }
-
-        // Sync shortcut strings from KeyboardShortcuts' own UserDefaults storage
-        // before writing to the DB.
+    /// Called on every draft change and every shortcut-recorder change.
+    /// Persists locally (instant) and re-attaches shortcut handlers.
+    func autoSave() {
         syncShortcutsFromRecorder()
+        saveError = nil
 
+        guard draft.shortcutsAreValid else {
+            // Conflict shown inline via validationError; don't persist a broken state.
+            return
+        }
         do {
-            try await settingsService.saveSettings(draft, session: session)
-            saveSuccess = true
-
-            // Re-register global shortcuts with the updated bindings.
-            // Note: AppDelegate's handler is replaced here; this is safe because
-            // the handler is stateless (it just calls handleShortcutTriggered on
-            // the delegate, not a closure that captures local state).
-            ShortcutManager.shared.register(settings: draft) { _ in }
+            try settingsService.saveSettings(draft)
+            ShortcutManager.shared.reattachHandlers()
+            flashSaved()
         } catch {
             saveError = error.localizedDescription
         }
     }
 
-    func resetToDefaults() {
-        draft = AppSettings()
+    private func flashSaved() {
+        flashTask?.cancel()
+        savedFlash = true
+        flashTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.savedFlash = false
+        }
     }
 
-    // MARK: - Shortcut Sync
+    // MARK: - API key save
 
-    /// Reads the current shortcut bindings from KeyboardShortcuts (which the
-    /// `KeyboardShortcuts.Recorder` UI component updates in-place) and writes
-    /// them back into `draft` so they're included in the DB save.
-    ///
-    /// Why this is needed:
-    ///   `KeyboardShortcuts.Recorder` writes directly to the framework's own
-    ///   UserDefaults persistence when the user picks a new combo. It does NOT
-    ///   update our `draft.shortcutPrivate/Business/Calm` strings. We must read
-    ///   them back via `KeyboardShortcuts.getShortcut(for:)` before saving.
-    ///
-    /// DB storage: we store the human-readable description (e.g. "⌘⌥P") as a
-    /// convenience for display in the status-panel popover and for future
-    /// cross-device sync. The KeyboardShortcuts framework itself is the
-    /// authoritative source for the actual binding on this device.
+    /// Validates the typed key against the OpenAI API and stores it in the Keychain.
+    func saveAPIKey() async {
+        let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        isValidatingKey = true
+        defer { isValidatingKey = false }
+
+        do {
+            try await OpenAIClient.shared.validate(apiKey: key)
+            KeychainStore.apiKey = key
+            apiKeyInput = ""
+            apiKeyStatus = .validated
+        } catch {
+            apiKeyStatus = .invalid(error.localizedDescription)
+        }
+    }
+
+    func removeAPIKey() {
+        KeychainStore.apiKey = nil
+        apiKeyStatus = .missing
+    }
+
+    // MARK: - Shortcut sync
+
+    /// Mirrors the framework-persisted bindings into `draft` for display/persistence.
     private func syncShortcutsFromRecorder() {
         draft.shortcutPrivate  = shortcutString(for: .dictatePrivate)
         draft.shortcutBusiness = shortcutString(for: .dictateBusiness)
-        draft.shortcutCalm     = shortcutString(for: .dictateCalm)
+        draft.shortcutRandom   = shortcutString(for: .dictateRandom)
     }
 
-    /// Returns the current display string for a named shortcut, or "" if not set.
     private func shortcutString(for name: KeyboardShortcuts.Name) -> String {
         KeyboardShortcuts.getShortcut(for: name)?.description ?? ""
     }

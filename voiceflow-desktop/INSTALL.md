@@ -1,66 +1,57 @@
-# Voiceflow — Installation Guide (Beta)
+# Voiceflow — Installation Guide
 
-## Installation
+Voiceflow is a macOS menu bar app for system-wide dictation with AI cleanup.
+You bring your own OpenAI API key — there is no account, no login, and no
+backend in between. Your key and your dictation history never leave your Mac.
 
-1. Open **Voiceflow-beta.dmg**
-2. Drag **Voiceflow** → **Applications**
-3. Eject the DMG
+## Requirements
 
-## First Launch
+- macOS 13 (Ventura) or newer
+- An OpenAI API key (created in step 3 — takes one minute)
 
-> **Important:** macOS Gatekeeper blocks apps that are not from the App Store on first open.
-> This is a one-time step for beta builds.
+## Install
 
-**Option A — Right-click method (recommended):**
-1. Open Finder → Applications
-2. Right-click **Voiceflow** → **Open**
-3. Click **Open** in the Gatekeeper dialog
+1. **Open `Voiceflow-x.y.z.dmg`** and drag **Voiceflow** into **Applications**.
 
-**Option B — Terminal:**
-```
-xattr -cr /Applications/Voiceflow.app
-```
-Then double-click the app normally.
+2. **First launch:** right-click `Voiceflow.app` → **Open** → confirm **Open**
+   in the dialog. This one-time step is required because beta builds are not
+   notarized by Apple.
+   Alternative via Terminal: `xattr -cr /Applications/Voiceflow.app`
 
-## Setup
+3. **Enter your OpenAI API key:** the setup window opens automatically on
+   first launch. Create a key at https://platform.openai.com/api-keys, paste
+   it, done. The key is stored in this Mac's Keychain only.
+   Typical cost: about $0.003 per minute of dictation.
 
-1. **Log in** with your approved Voiceflow account
+4. **Set your shortcuts:** click the menu bar icon → **Einstellungen** → record
+   a shortcut for each mode (e.g. ⌥1, ⌥2, ⌥3). Changes save automatically.
 
-2. **Grant microphone access** — approve the system dialog on first launch
+5. **Grant Microphone access** when macOS asks during your first dictation.
 
-3. **Configure keyboard shortcuts**
-   - Click the menu bar icon → **Settings**
-   - Assign a shortcut to each mode (Private, Business, Calm)
-   - Press **Save**
+6. **Grant Accessibility access** (recommended — enables direct text
+   insertion): System Settings → Privacy & Security → Accessibility → enable
+   Voiceflow. Without it, text lands in the clipboard and you paste with ⌘V.
 
-4. **Grant Accessibility access** (enables direct text insertion)
-   - System Settings → Privacy & Security → Accessibility
-   - Enable **Voiceflow**
-   - Without this, transcribed text is pasted via clipboard
+7. **Keychain prompt (one time):** at your first dictation macOS may ask
+   "Voiceflow wants to use your confidential information…". Click
+   **Always Allow** — this authorizes this app build to read its own API key
+   and will not appear again.
 
-## How to Dictate
+## Usage
 
-1. Focus any text field in any app
-2. Press your configured shortcut — the menu bar icon turns **red** (recording active)
-3. Speak your text
-4. Press the **same shortcut again** — Voiceflow transcribes and inserts the text
-5. The icon turns **green** when done
+- Press a shortcut → speak → press the same shortcut again.
+- The polished text appears in your active text field, in the tone of the mode:
+  - **Privat** — light cleanup, your wording stays
+  - **Business** — polished, professional register
+  - **Random** — your rules: give it any instruction in Settings
+    (e.g. "Translate everything to English")
+- Each mode accepts a custom instruction in Settings to personalize the output.
+- History: right-click the menu bar icon → **Verlauf öffnen** (stored locally,
+  can be disabled or deleted in Settings).
+- Remove the app completely (key, settings, history, permissions, app):
+  Settings → **Daten & Deinstallation** → **App vollständig entfernen**.
 
-## Modes
+## Support
 
-| Mode | Shortcut | What it does |
-|------|----------|--------------|
-| **Private** | Your choice | Light cleanup — punctuation and capitalisation only |
-| **Business** | Your choice | Professional rewrite, customer-facing tone |
-| **Calm** | Your choice | De-escalated rewrite, removes aggressive language |
-
-## Troubleshooting
-
-**No menu bar icon:** The app may not have launched. Check Activity Monitor for "Voiceflow".
-
-**Shortcut does nothing:** Open Settings and verify a shortcut is configured for the mode you're pressing.
-
-**Text goes to clipboard instead of text field:** Accessibility permission is not granted.  
-Go to System Settings → Privacy & Security → Accessibility → enable Voiceflow.
-
-**App says "Account Pending":** Your account hasn't been approved yet. Contact your administrator.
+Please include the version number (bottom-left in Settings, e.g. `v1.0.0 (8)`)
+when reporting issues.
