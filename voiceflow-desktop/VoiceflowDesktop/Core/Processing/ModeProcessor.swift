@@ -137,13 +137,21 @@ final class ModeProcessor {
 
         let systemPrompt = mode.systemPrompt(userInstruction: userInstruction)
 
+        // Predicted Outputs speed up editing tasks where output ≈ input
+        // (Privat/Business). Random with a custom instruction can transform the
+        // text arbitrarily (translate, restructure) — prediction would be
+        // rejected and only cost extra, so skip it there.
+        let predictOutput = !(mode == .random
+            && !userInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
         for attempt in 1...Self.maxAttempts {
             do {
                 let polished = try await client.chat(
                     systemPrompt: systemPrompt,
                     userText: text,
                     model: textModel,
-                    apiKey: apiKey
+                    apiKey: apiKey,
+                    predictOutput: predictOutput
                 )
                 return Result(text: polished, usedFallback: false)
 
