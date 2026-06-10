@@ -32,14 +32,18 @@ except ImportError:
     sys.exit(1)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SOURCE = REPO_ROOT / "AppIcon.png"
+# IMPORTANT: extract from the squircle-MASKED icon, not the raw source.
+# The raw Nano Banana PNG contains a baked-in fake-transparency checkerboard
+# whose white squares pass any luminance threshold — extracting from the raw
+# file put a checkered frame around the V in the menu bar. The masked file has
+# genuinely transparent corners, so only the real white mark survives.
+MASKED = REPO_ROOT / ".build" / "AppIcon.prepared.png"
+RAW    = REPO_ROOT / "AppIcon.png"
+SOURCE = MASKED if MASKED.exists() else RAW
 OUT_DIR = REPO_ROOT / "VoiceflowDesktop" / "Resources"
 
 # Pixels brighter than this are considered "the white V-mark".
-# Higher = stricter: keeps only the solid white core of the V+wave, drops the
-# soft glow/halo so the menu bar mark renders as a clean monochrome shape with
-# no surrounding rectangle or rim.
-LUMINANCE_THRESHOLD = int(os.environ.get("VF_MENUBAR_THRESHOLD", "240"))
+LUMINANCE_THRESHOLD = int(os.environ.get("VF_MENUBAR_THRESHOLD", "235"))
 # Padding around the bounding box, as a fraction of its larger dimension
 PADDING_RATIO = 0.06
 
@@ -70,10 +74,14 @@ def main() -> int:
                 continue
             lum = luminance(r, g, b)
             if lum >= LUMINANCE_THRESHOLD:
-                # Hard threshold: the V+wave is fully opaque, halo is fully cut.
-                # Only the very brightest pixels survive — produces a clean
-                # monochrome shape with no surrounding rectangle/rim.
-                tx[x, y] = (0, 0, 0, 255)
+                # Graded alpha over a narrow band above the threshold so the
+                # mark keeps anti-aliased edges when scaled to 18 px — a hard
+                # 0/255 cut looked jagged in the menu bar.
+                t = (lum - LUMINANCE_THRESHOLD) / (255 - LUMINANCE_THRESHOLD)
+                alpha = int(min(255, max(0, t * 1.6 * 255)))
+                if alpha < 10:
+                    continue
+                tx[x, y] = (0, 0, 0, alpha)
                 found += 1
                 if x < min_x: min_x = x
                 if y < min_y: min_y = y

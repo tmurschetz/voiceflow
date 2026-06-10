@@ -116,10 +116,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let audio else { return }
                 await updateMenuBarState(.processing)
 
-                // Transcribe (fast model, user's key)
+                // Transcribe with the user-selected model
                 let transcriptionResult = try await transcriptionService.transcribe(
                     audio: audio,
-                    language: settings?.language ?? .autoDetect
+                    language: settings?.language ?? .autoDetect,
+                    model: settings?.transcribeModel ?? TranscribeModel.recommended.id
                 )
 
                 // Tone-of-voice rewrite — retries transient failures and falls
@@ -127,6 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let processingResult = try await modeProcessor.process(
                     text: transcriptionResult.transcript,
                     mode: mode,
+                    userInstruction: settings?.instruction(for: mode) ?? "",
+                    textModel: settings?.textModel ?? TextModel.recommended.id,
                     onRetry: { [weak self] event in
                         switch event {
                         case .willRetryIn(let sec, let attempt, let total):
@@ -143,14 +146,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let usedClipboard = try await outputService.output(
                     text: processed, mode: outputMode, targetPID: targetPID)
 
-                // Local history + last-dictation in the panel
-                HistoryStore.shared.logCompleted(
-                    mode: mode,
-                    raw: transcriptionResult.transcript,
-                    final: processed,
-                    audioSeconds: audioSeconds,
-                    usedFallback: processingResult.usedFallback
-                )
+                // Local history (respects the privacy toggle) + last-dictation in the panel
+                if settings?.historyEnabled ?? true {
+                    HistoryStore.shared.logCompleted(
+                        mode: mode,
+                        raw: transcriptionResult.transcript,
+                        final: processed,
+                        audioSeconds: audioSeconds,
+                        usedFallback: processingResult.usedFallback
+                    )
+                }
                 menuBarController?.setLastDictation(processed)
 
                 // Pick the most informative success state
@@ -169,7 +174,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             } catch {
                 stopRecordingTimer()
-                HistoryStore.shared.logFailed(mode: mode, errorMessage: error.localizedDescription)
+                if settings?.historyEnabled ?? true {
+                    HistoryStore.shared.logFailed(mode: mode, errorMessage: error.localizedDescription)
+                }
                 await updateMenuBarState(.error(error.localizedDescription))
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
                 await updateMenuBarState(.idle)
@@ -179,7 +186,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             audio?.cleanup()
 
         } else {
-            // First press: start recording
+            // First press: start recording.
+            // Warm up the TLS connection to api.openai.com in parallel — the
+            // handshake (~300–600 ms) completes while the user is speaking, so
+            // the transcription POST reuses the open connection.
+            OpenAIClient.shared.warmUpConnection()
             do {
                 try await recordingService.startRecording(deviceID: settings?.microphoneDevice)
                 await updateMenuBarState(.recording(mode: mode))

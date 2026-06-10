@@ -1,13 +1,17 @@
 import Foundation
 
-/// Direct client for the OpenAI API — the only backend Voiceflow talks to.
+/// Direct client for the OpenAI API — the only network endpoint Voiceflow talks to.
 ///
 /// Endpoints used:
-///   POST /v1/audio/transcriptions   — speech-to-text (gpt-4o-mini-transcribe, whisper-1 fallback)
-///   POST /v1/chat/completions       — tone-of-voice rewriting (Private/Business/Calm)
-///   GET  /v1/models                 — API-key validation during onboarding
+///   POST /v1/audio/transcriptions   — speech-to-text
+///   POST /v1/chat/completions       — tone-of-voice rewriting
+///   GET  /v1/models                 — API-key validation + connection warm-up
 ///
-/// The API key comes from the Keychain (user-supplied during onboarding).
+/// Security properties:
+///   - The API key comes from the Keychain and is only ever placed in the
+///     Authorization header of requests to https://api.openai.com.
+///   - The key is never logged, never written to disk outside the Keychain,
+///     and never sent anywhere else (this client is the app's entire network layer).
 final class OpenAIClient {
 
     static let shared = OpenAIClient()
@@ -16,10 +20,12 @@ final class OpenAIClient {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 45   // generous for long dictations
         config.timeoutIntervalForResource = 120
+        // TLS 1.2+ only (1.3 is negotiated automatically when available).
+        config.tlsMinimumSupportedProtocolVersion = .TLSv12
         return URLSession(configuration: config)
     }()
 
-    // MARK: - Key validation
+    // MARK: - Key validation / connection warm-up
 
     /// Validates an API key by listing models. Throws `OpenAIError` on failure.
     func validate(apiKey: String) async throws {
@@ -33,32 +39,39 @@ final class OpenAIClient {
         }
     }
 
+    /// Fire-and-forget connection warm-up. Called when recording STARTS so the
+    /// DNS lookup + TCP + TLS handshake (~300–600 ms) happen while the user is
+    /// still speaking — the transcription POST then reuses the warm connection.
+    func warmUpConnection() {
+        guard let apiKey = KeychainStore.apiKey else { return }
+        Task.detached(priority: .utility) { [session] in
+            var req = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
+            req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            req.timeoutInterval = 10
+            _ = try? await session.data(for: req)
+        }
+    }
+
     // MARK: - Transcription
 
     struct Transcription {
         let text: String
     }
 
-    /// Transcribes the audio file using the fastest available model.
+    /// Transcribes the audio file with the user-selected model.
     ///
-    /// Strategy: try `gpt-4o-mini-transcribe` (half the price of whisper-1, lower
-    /// latency, better WER). If the account doesn't have access (400/403/404 model
-    /// error), permanently fall back to `whisper-1` (remembered in UserDefaults so
-    /// we don't pay the failed round-trip on every dictation).
-    func transcribe(audioData: Data, fileExt: String, languageCode: String?, apiKey: String) async throws -> Transcription {
-        let fallbackFlag = "com.voiceflow.desktop.transcribe_fallback_whisper1"
-        let useFallback = UserDefaults.standard.bool(forKey: fallbackFlag)
-        let primaryModel = useFallback ? "whisper-1" : "gpt-4o-mini-transcribe"
-
+    /// If the account lacks access to the selected model (400/403/404 model
+    /// error), falls back to whisper-1 for this call — without overriding the
+    /// user's choice in Settings.
+    func transcribe(audioData: Data, fileExt: String, languageCode: String?,
+                    model: String, apiKey: String) async throws -> Transcription {
         do {
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
-                                            languageCode: languageCode, model: primaryModel, apiKey: apiKey)
-        } catch let OpenAIError.httpError(code, message) where !useFallback && (code == 400 || code == 403 || code == 404)
+                                            languageCode: languageCode, model: model, apiKey: apiKey)
+        } catch let OpenAIError.httpError(code, message) where model != "whisper-1"
+                    && (code == 400 || code == 403 || code == 404)
                     && message.lowercased().contains("model") {
-            // Account lacks access to the new model — remember and fall back.
-            NSLog("[OpenAIClient] %@ unavailable (%d: %@) — falling back to whisper-1 permanently",
-                  primaryModel, code, message)
-            UserDefaults.standard.set(true, forKey: fallbackFlag)
+            NSLog("[OpenAIClient] %@ unavailable (%d) — falling back to whisper-1 for this call", model, code)
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
                                             languageCode: languageCode, model: "whisper-1", apiKey: apiKey)
         }
@@ -71,7 +84,7 @@ final class OpenAIClient {
 
         var body = Data()
         body.appendFormField(name: "model", value: model, boundary: boundary)
-        // Faster server-side path: plain JSON, no timestamps/verbose metadata.
+        // Fast server path: plain JSON, no timestamps/verbose metadata.
         body.appendFormField(name: "response_format", value: "json", boundary: boundary)
         if let languageCode {
             body.appendFormField(name: "language", value: languageCode, boundary: boundary)
@@ -86,13 +99,16 @@ final class OpenAIClient {
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
 
+        let started = Date()
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw OpenAIError.invalidResponse }
         guard http.statusCode == 200 else {
             let msg = Self.errorMessage(from: data)
-            NSLog("[VF-Whisper] HTTP %d model=%@ body=%@", http.statusCode, model, msg)
+            NSLog("[VF-Transcribe] HTTP %d model=%@ body=%@", http.statusCode, model, msg)
             throw OpenAIError.httpError(http.statusCode, msg)
         }
+        NSLog("[VF-Transcribe] %.2fs model=%@ upload=%dKB", Date().timeIntervalSince(started),
+              model, audioData.count / 1024)
 
         struct Response: Decodable { let text: String }
         let decoded = try JSONDecoder().decode(Response.self, from: data)
@@ -102,7 +118,7 @@ final class OpenAIClient {
     // MARK: - Chat (tone-of-voice rewriting)
 
     /// Runs a single chat completion. Low temperature for deterministic editing.
-    func chat(systemPrompt: String, userText: String, apiKey: String) async throws -> String {
+    func chat(systemPrompt: String, userText: String, model: String, apiKey: String) async throws -> String {
         struct Message: Codable { let role: String; let content: String }
         struct RequestBody: Encodable {
             let model: String
@@ -118,7 +134,7 @@ final class OpenAIClient {
         }
 
         let body = RequestBody(
-            model: Config.chatModel,
+            model: model,
             messages: [
                 Message(role: "system", content: systemPrompt),
                 Message(role: "user", content: userText)
@@ -132,13 +148,15 @@ final class OpenAIClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)
 
+        let started = Date()
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw OpenAIError.invalidResponse }
         guard http.statusCode == 200 else {
             let msg = Self.errorMessage(from: data)
-            NSLog("[VF-Chat] HTTP %d body=%@", http.statusCode, msg)
+            NSLog("[VF-Chat] HTTP %d model=%@ body=%@", http.statusCode, model, msg)
             throw OpenAIError.httpError(http.statusCode, msg)
         }
+        NSLog("[VF-Chat] %.2fs model=%@", Date().timeIntervalSince(started), model)
 
         let decoded = try JSONDecoder().decode(ResponseBody.self, from: data)
         guard let content = decoded.choices.first?.message.content,
@@ -151,6 +169,7 @@ final class OpenAIClient {
     // MARK: - Helpers
 
     /// Extracts the human-readable message from an OpenAI error payload.
+    /// Never includes request headers — the API key cannot leak through here.
     private static func errorMessage(from data: Data) -> String {
         struct ErrorEnvelope: Decodable {
             struct Inner: Decodable { let message: String? }

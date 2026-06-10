@@ -8,16 +8,21 @@ import KeyboardShortcuts
 /// grouped form, colored icon badges, instant auto-save (no Save button).
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
+    /// Window height — overridable so the snapshot harness can render the
+    /// whole form unscrolled for design review.
+    var height: CGFloat = 720
 
     var body: some View {
         VStack(spacing: 0) {
             Form {
                 APIKeySection(viewModel: viewModel)
                 GeneralSection(viewModel: viewModel)
-                ShortcutsSection(viewModel: viewModel)
+                ModesSection(viewModel: viewModel)
+                ModelSection(viewModel: viewModel)
                 LanguageSection(viewModel: viewModel)
                 OutputSection(viewModel: viewModel)
                 PermissionsSection()
+                DataSection(viewModel: viewModel)
             }
             .formStyle(.grouped)
 
@@ -50,7 +55,7 @@ struct SettingsView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
         }
-        .frame(width: 560, height: 640)
+        .frame(width: 580, height: height)
         .onChange(of: viewModel.draft) { _ in viewModel.autoSave() }
     }
 }
@@ -80,7 +85,6 @@ private struct APIKeySection: View {
 
     var body: some View {
         Section {
-            // Status row
             HStack(spacing: 10) {
                 IconBadge(systemName: "key.fill", color: statusColor)
                 VStack(alignment: .leading, spacing: 1) {
@@ -96,8 +100,6 @@ private struct APIKeySection: View {
                 }
             }
 
-            // Entry row — empty label + prompt so the grouped Form doesn't
-            // render a duplicate leading label next to the field.
             HStack(spacing: 8) {
                 SecureField(text: $viewModel.apiKeyInput, prompt: Text("Neuen Key einfügen (sk-…)")) {
                     EmptyView()
@@ -124,7 +126,7 @@ private struct APIKeySection: View {
             }
         } footer: {
             HStack(spacing: 4) {
-                Text("Der Key bleibt im Schlüsselbund dieses Macs.")
+                Text("Der Key bleibt im Schlüsselbund dieses Macs und geht ausschliesslich an api.openai.com.")
                 Button("Key erstellen ↗") {
                     if let url = URL(string: Config.apiKeysURL) { NSWorkspace.shared.open(url) }
                 }
@@ -168,62 +170,123 @@ private struct GeneralSection: View {
     }
 }
 
-// MARK: - Section: Shortcuts
+// MARK: - Section: Modes (shortcut + custom instruction per mode)
 
-private struct ShortcutsSection: View {
+private struct ModesSection: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
         Section {
-            ShortcutRow(
-                icon: "person.fill", color: .blue,
-                label: "Private",
-                description: "Leichte Korrektur — dein Wortlaut bleibt",
+            ModeRow(
+                mode: .private, color: .blue,
                 name: .dictatePrivate,
-                onChange: { viewModel.autoSave() }
+                instruction: $viewModel.draft.instructionPrivate,
+                placeholder: "z. B. «Behalte Anglizismen bei, schreibe Zahlen immer als Ziffern»",
+                onShortcutChange: { viewModel.autoSave() }
             )
-            ShortcutRow(
-                icon: "briefcase.fill", color: .indigo,
-                label: "Business",
-                description: "Professioneller, geschäftstauglicher Ton",
+            ModeRow(
+                mode: .business, color: .indigo,
                 name: .dictateBusiness,
-                onChange: { viewModel.autoSave() }
+                instruction: $viewModel.draft.instructionBusiness,
+                placeholder: "z. B. «Unterschreibe nie, verwende unser Wording: Kundinnen und Kunden»",
+                onShortcutChange: { viewModel.autoSave() }
             )
-            ShortcutRow(
-                icon: "leaf.fill", color: .teal,
-                label: "Calm",
-                description: "Deeskaliert — sachlich statt emotional",
-                name: .dictateCalm,
-                onChange: { viewModel.autoSave() }
+            ModeRow(
+                mode: .random, color: .pink,
+                name: .dictateRandom,
+                instruction: $viewModel.draft.instructionRandom,
+                placeholder: "z. B. «Übersetze alles auf Englisch» oder «Formatiere als Bullet-Liste»",
+                onShortcutChange: { viewModel.autoSave() }
             )
         } header: {
-            Text("Shortcuts")
+            Text("Modi")
         } footer: {
-            Text("Gleicher Shortcut nochmals drücken stoppt die Aufnahme.")
+            Text("Gleicher Shortcut nochmals drücken stoppt die Aufnahme. Die Instruktion personalisiert den Output des jeweiligen Modus — sie wird der KI bei jedem Diktat mitgegeben.")
                 .font(.caption)
         }
     }
 }
 
-private struct ShortcutRow: View {
-    let icon: String
+private struct ModeRow: View {
+    let mode: ProcessingMode
     let color: Color
-    let label: String
-    let description: String
     let name: KeyboardShortcuts.Name
-    let onChange: () -> Void
+    @Binding var instruction: String
+    let placeholder: String
+    let onShortcutChange: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            IconBadge(systemName: icon, color: color)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(label)
-                Text(description)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                IconBadge(systemName: mode.sfSymbol, color: color)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(mode.displayName)
+                    Text(mode.shortDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                KeyboardShortcuts.Recorder(for: name) { _ in onShortcutChange() }
+            }
+
+            TextField(text: $instruction, prompt: Text(placeholder), axis: .vertical) {
+                EmptyView()
+            }
+            .textFieldStyle(.roundedBorder)
+            .labelsHidden()
+            .font(.caption)
+            .lineLimit(2...4)
+            .padding(.leading, 34)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Section: Models
+
+private struct ModelSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
+    var body: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    IconBadge(systemName: "waveform", color: .cyan)
+                    Picker("Transkription", selection: $viewModel.draft.transcribeModel) {
+                        ForEach(TranscribeModel.all) { model in
+                            Text(model.name).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                Text(TranscribeModel.byID(viewModel.draft.transcribeModel).guidance)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .padding(.leading, 34)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer()
-            KeyboardShortcuts.Recorder(for: name) { _ in onChange() }
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    IconBadge(systemName: "wand.and.stars", color: .purple)
+                    Picker("Text-Veredelung", selection: $viewModel.draft.textModel) {
+                        ForEach(TextModel.all) { model in
+                            Text(model.name).tag(model.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                Text(TextModel.byID(viewModel.draft.textModel).guidance)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 34)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text("Modelle")
+        } footer: {
+            Text("Sprachen: Alle Modelle beherrschen Deutsch, Schweizerdeutsch und Englisch sehr gut. Für seltenere Sprachen (z. B. Rätoromanisch-nahe Idiome, Osteuropäisch, Asiatisch) ist Whisper mit 98 Sprachen die sicherste Wahl.")
+                .font(.caption)
         }
     }
 }
@@ -251,7 +314,7 @@ private struct LanguageSection: View {
         } header: {
             Text("Sprache")
         } footer: {
-            Text("Auto-detect erkennt Deutsch, Schweizerdeutsch und Englisch automatisch.")
+            Text("Auto-detect erkennt die gesprochene Sprache automatisch. Manuell festlegen lohnt sich nur, wenn die Erkennung danebenliegt.")
                 .font(.caption)
         }
     }
@@ -303,7 +366,6 @@ private struct OutputSection: View {
 private struct PermissionsSection: View {
     @State private var hasMic = false
     @State private var hasAX  = false
-    /// Polls every 2 s so grants made in System Settings appear without reopening.
     @State private var pollTimer: Timer? = nil
 
     var body: some View {
@@ -370,6 +432,60 @@ private struct PermissionRow: View {
                 }
                 .controlSize(.small)
             }
+        }
+    }
+}
+
+// MARK: - Section: Data & Uninstall
+
+private struct DataSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
+    @State private var historyCleared = false
+
+    var body: some View {
+        Section {
+            HStack(spacing: 10) {
+                IconBadge(systemName: "clock.arrow.circlepath", color: .teal)
+                Toggle("Diktat-Verlauf lokal speichern", isOn: $viewModel.draft.historyEnabled)
+            }
+
+            HStack(spacing: 10) {
+                IconBadge(systemName: "trash", color: .gray)
+                Text("Verlauf löschen")
+                Spacer()
+                if historyCleared {
+                    Label("Gelöscht", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption)
+                } else {
+                    Button("Löschen") {
+                        HistoryStore.shared.clear()
+                        historyCleared = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { historyCleared = false }
+                    }
+                    .controlSize(.small)
+                }
+            }
+
+            HStack(spacing: 10) {
+                IconBadge(systemName: "xmark.bin.fill", color: .red)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("App vollständig entfernen")
+                    Text("Key, Einstellungen, Verlauf, Berechtigungen und die App selbst — ohne Spuren.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Entfernen…", role: .destructive) {
+                    Uninstaller.requestUninstall()
+                }
+                .controlSize(.small)
+            }
+        } header: {
+            Text("Daten & Deinstallation")
+        } footer: {
+            Text("Der Verlauf liegt ausschliesslich lokal unter ~/Library/Application Support/Voiceflow/ und verlässt deinen Mac nie.")
+                .font(.caption)
         }
     }
 }

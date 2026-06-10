@@ -122,7 +122,7 @@ final class SettingsViewModel: ObservableObject {
     private func syncShortcutsFromRecorder() {
         draft.shortcutPrivate  = shortcutString(for: .dictatePrivate)
         draft.shortcutBusiness = shortcutString(for: .dictateBusiness)
-        draft.shortcutCalm     = shortcutString(for: .dictateCalm)
+        draft.shortcutRandom   = shortcutString(for: .dictateRandom)
     }
 
     private func shortcutString(for name: KeyboardShortcuts.Name) -> String {

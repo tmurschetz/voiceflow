@@ -20,6 +20,56 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [0.4.0] — 2026-06-10
+
+### Changed (modes)
+- **Three modes: Privat, Business, Random** (Calm replaced by Random). Random
+  is the free mode: its behaviour is defined by your own instruction — e.g.
+  "Übersetze alles auf Englisch" or "Formatiere als Bullet-Liste".
+- **Per-mode custom instructions**: every mode has a free-text instruction
+  field in Settings that personalises the AI output for that mode. The
+  instruction is appended to the system prompt on every dictation.
+- Existing Calm shortcut bindings are migrated to Random automatically.
+
+### Added
+- **Model selection with guidance** in Settings:
+  - Transkription: GPT-4o mini Transcribe (empfohlen — am schnellsten/günstigsten),
+    GPT-4o Transcribe (höchste Genauigkeit), Whisper (98 Sprachen).
+  - Text-Veredelung: GPT-4o mini (empfohlen) oder GPT-4o (beste Schreibqualität).
+  - Each picker shows a plain-language hint about speed, price, accuracy and
+    language coverage; a footer explains which model suits which languages.
+- **Trace-free uninstall** (Settings → Daten & Deinstallation): removes the
+  API key from the Keychain, all preferences and shortcut bindings, the local
+  history, the login item, mic/accessibility permissions (tccutil), and moves
+  the app to the Trash — with a confirmation dialog listing everything.
+- **History controls**: toggle "Diktat-Verlauf lokal speichern" (default on)
+  and a one-click "Verlauf löschen".
+
+### Performance
+- **Connection warm-up**: when recording starts, the TLS handshake to
+  api.openai.com runs in parallel — the transcription POST reuses the warm
+  connection, saving ~300–600 ms on every dictation.
+- **Speech-optimised recording**: 16 kHz mono AAC @ 32 kbps (ASR models
+  downsample to 16 kHz anyway) — roughly halves the upload size vs 44.1 kHz.
+- Timing logs for both pipeline stages: `[VF-Transcribe]` and `[VF-Chat]`.
+
+### Security (audit findings)
+- The API key lives in the Keychain (AfterFirstUnlock, ThisDeviceOnly), is
+  only ever sent to https://api.openai.com, and never appears in logs.
+- TLS 1.2 minimum enforced on the URLSession.
+- Entitlements documented: network.client is exclusively for api.openai.com;
+  disable-library-validation is required only while ad-hoc signed.
+- History is plain-text local JSONL — now user-controllable (toggle + delete
+  + full uninstall).
+
+### Fixed
+- **Menu bar icon showed a checkerboard frame** — the template was extracted
+  from the raw source PNG whose baked-in fake-transparency checker passed the
+  luminance threshold. Extraction now runs on the squircle-masked icon and
+  uses graded alpha for smooth edges at 18 px.
+
+---
+
 ## [0.3.0] — 2026-06-10
 
 **The "Fable" release: fully local-first. Bring your own OpenAI key — no login,

@@ -2,33 +2,42 @@ import Foundation
 
 // MARK: - ProcessingMode
 
-/// The three dictation modes (tone of voice).
+/// The three dictation modes. Each can be personalised with a free-text
+/// instruction from Settings (AppSettings.instruction(for:)).
 enum ProcessingMode: String, CaseIterable {
     case `private` = "private"
     case business  = "business"
-    case calm      = "calm"
+    case random    = "random"
 
     var displayName: String {
         switch self {
-        case .private:  return "Private"
+        case .private:  return "Privat"
         case .business: return "Business"
-        case .calm:     return "Calm"
+        case .random:   return "Random"
         }
     }
 
-    /// The system prompt for this mode. Lives client-side — there is no server.
-    ///
-    /// Shared rules across all modes (mirrors what modern tools like Typeless do):
-    ///   - Mirror the input language (German/Swiss German → Swiss Standard German
-    ///     with ss instead of ß; English → English)
-    ///   - Mirror the speaker's register (Du vs Sie) — never override it
-    ///   - Handle self-corrections ("send it Monday — no wait, Tuesday" → Tuesday)
-    ///   - Remove filler words (ähm, halt, quasi, like, you know)
-    ///   - Never add letter structure (no salutation, no closing, no subject)
-    ///   - Output only the text, no explanations
-    var systemPrompt: String {
+    var shortDescription: String {
+        switch self {
+        case .private:  return "Leichte Korrektur — dein Wortlaut bleibt"
+        case .business: return "Professioneller, geschäftstauglicher Ton"
+        case .random:   return "Deine Regeln — ganz nach deiner Instruktion"
+        }
+    }
+
+    var sfSymbol: String {
+        switch self {
+        case .private:  return "person.fill"
+        case .business: return "briefcase.fill"
+        case .random:   return "sparkles"
+        }
+    }
+
+    /// Builds the full system prompt for this mode, including the user's
+    /// custom instruction when present.
+    func systemPrompt(userInstruction: String) -> String {
         let shared = """
-        Universal rules (always apply):
+        Universal rules (always apply, highest priority):
         - Respond ONLY with the transformed text. No explanations, no quotes, no preamble.
         - Mirror the input language. German or Swiss German dialect input → output in Swiss \
         Standard German (Schweizer Hochdeutsch): always use "ss" instead of "ß", Swiss \
@@ -37,47 +46,48 @@ enum ProcessingMode: String, CaseIterable {
         use Sie/Ihnen, keep Sie-form; if unclear, use Sie-form (German) or neutral (English).
         - Apply self-corrections: when the speaker corrects themselves mid-sentence \
         ("am Montag — nein, am Dienstag"), keep only the corrected version.
-        - Remove filler words (ähm, äh, halt, quasi, sozusagen, eigentlich as filler, \
-        um, uh, like, you know).
-        - Never add anything that was not said: no salutations (Sehr geehrte, Hallo, Dear), \
-        no closings (Mit freundlichen Grüssen, Best regards), no subject lines, no extra \
-        sentences. The output stays roughly the same length as the input.
-        - Format numbers, dates, e-mail addresses and URLs properly (zwanzig Prozent → 20 %, \
-        drei Uhr → 15:00 only if clearly an appointment).
+        - Remove filler words (ähm, äh, halt, quasi, sozusagen, um, uh, like, you know).
+        - Never add anything that was not said: no salutations, no closings, no subject \
+        lines, no extra sentences — unless the user's custom instruction explicitly asks for it.
+        - Format numbers, dates, e-mail addresses and URLs properly.
         """
 
+        let base: String
         switch self {
         case .private:
-            return """
+            base = """
             You are a transcription editor for a dictation tool. Lightly clean up the spoken \
             input: fix punctuation, capitalisation and obvious transcription errors, apply \
             self-corrections, remove fillers. Do NOT rewrite, restructure or change the \
             meaning, vocabulary or tone of what was said.
-
-            \(shared)
             """
         case .business:
-            return """
+            base = """
             You are a professional writing editor for a dictation tool. Rewrite the spoken \
             input in a polished, professional register — direct and concise, Swiss business \
             style, no flowery phrasing. Keep the same format and roughly the same length as \
-            what was said. This is NOT a letter or an email: never add salutations, closings \
-            or subject lines. Fix grammar, tighten phrasing, remove fillers — but do not add \
+            what was said. Fix grammar, tighten phrasing, remove fillers — but do not add \
             new content or change the meaning.
-
-            \(shared)
             """
-        case .calm:
-            return """
-            You are a communication coach for a dictation tool. Rewrite the spoken input to \
-            remove aggression, sarcasm, frustration and blunt language while keeping the core \
-            message and roughly the same length. Stay direct and specific — do NOT use vague \
-            therapeutic phrases ("Lass uns kurz innehalten", "I hear you"). The result should \
-            sound like a calm, professional person, not a mediator.
-
-            \(shared)
+        case .random:
+            base = """
+            You are a flexible text transformer for a dictation tool. Your behaviour is \
+            defined primarily by the user's custom instruction below. If no custom \
+            instruction is given, apply a light cleanup only (punctuation, fillers, \
+            self-corrections) and keep the speaker's wording.
             """
         }
+
+        let instruction = userInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let personalisation = instruction.isEmpty ? "" : """
+
+
+        User's custom instruction for this mode (apply it faithfully; it overrides style \
+        defaults but never the universal rules):
+        «\(instruction)»
+        """
+
+        return base + "\n\n" + shared + personalisation
     }
 }
 
@@ -86,9 +96,9 @@ enum ProcessingMode: String, CaseIterable {
 /// Applies the tone-of-voice transformation by calling the OpenAI chat API directly
 /// with the user's own key. No app backend involved.
 ///
-/// Resilience: transient failures (5xx, timeouts, connection loss) are retried once
-/// after a visible 5-second countdown; if all attempts fail, the raw transcript is
-/// returned so the user never loses a dictation.
+/// Resilience: transient failures (429/5xx, timeouts, connection loss) are retried
+/// once after a visible 5-second countdown; if all attempts fail, the raw transcript
+/// is returned so the user never loses a dictation.
 final class ModeProcessor {
 
     private let client = OpenAIClient.shared
@@ -114,6 +124,8 @@ final class ModeProcessor {
     func process(
         text: String,
         mode: ProcessingMode,
+        userInstruction: String,
+        textModel: String,
         onRetry: (@MainActor @Sendable (RetryEvent) async -> Void)? = nil
     ) async throws -> Result {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -123,11 +135,14 @@ final class ModeProcessor {
             throw OpenAIError.missingAPIKey
         }
 
+        let systemPrompt = mode.systemPrompt(userInstruction: userInstruction)
+
         for attempt in 1...Self.maxAttempts {
             do {
                 let polished = try await client.chat(
-                    systemPrompt: mode.systemPrompt,
+                    systemPrompt: systemPrompt,
                     userText: text,
+                    model: textModel,
                     apiKey: apiKey
                 )
                 return Result(text: polished, usedFallback: false)
@@ -150,11 +165,9 @@ final class ModeProcessor {
                     continue
                 }
                 if retryable {
-                    // Retries exhausted — return the raw transcript so no dictation is lost.
                     NSLog("[ModeProcessor] All %d attempts failed. Returning raw transcript.", Self.maxAttempts)
                     return Result(text: text, usedFallback: true)
                 }
-                // Non-retryable (invalid key, malformed request) — surface it.
                 throw error
             }
         }
@@ -164,8 +177,6 @@ final class ModeProcessor {
 
     // MARK: - Retry classification
 
-    /// 5xx + 429 + transport-level errors are transient → retry, then raw fallback.
-    /// 401 (bad key) and other 4xx indicate a configuration problem → surface immediately.
     private static func isRetryable(_ error: Error) -> Bool {
         if let apiError = error as? OpenAIError {
             switch apiError {

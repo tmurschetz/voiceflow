@@ -12,6 +12,7 @@
 		25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D890CA6F7B69B61E3FEB566E /* StatusPanelView.swift */; };
 		267C9E58CC635208243DC33B /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5FA3A581A678762801BEF8A /* CoreAudio.framework */; };
 		36F3E0BC45A7D6359355C01B /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = B6D686FB7744045773898F27 /* KeyboardShortcuts */; };
+		37AD9CC284EC6920152BD21E /* Uninstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */; };
 		3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79A466290CA8761E783FAE /* ModeProcessor.swift */; };
 		3FA7FB275C280983C9C22AA2 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3859001B87688555C43F1897 /* OnboardingView.swift */; };
 		4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C203490056D9249E43F16113 /* SettingsView.swift */; };
@@ -43,6 +44,7 @@
 		2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceflowDesktopApp.swift; sourceTree = "<group>"; };
 		3859001B87688555C43F1897 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
+		4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uninstaller.swift; sourceTree = "<group>"; };
 		69200CC3359B433509E3E7C5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		6E79A466290CA8761E783FAE /* ModeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeProcessor.swift; sourceTree = "<group>"; };
 		768F27D8149E7D8144BAD286 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
@@ -254,6 +256,7 @@
 				C7563138D9880266FA772ECF /* AppInfo.swift */,
 				1278BBE0DFB6124FCF67EED0 /* Config.swift */,
 				69200CC3359B433509E3E7C5 /* KeychainStore.swift */,
+				4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */,
 				739260BE9C1108D1B9C338E0 /* Logging */,
 				D642D68520AE8AFEEE3FDC37 /* OpenAI */,
 				0324C017D45034FF55213425 /* Output */,
@@ -358,6 +361,7 @@
 				25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */,
 				0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */,
 				EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */,
+				37AD9CC284EC6920152BD21E /* Uninstaller.swift in Sources */,
 				64EBA98BCC8FD1F558D860C5 /* VoiceflowDesktopApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -416,7 +420,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -433,7 +437,7 @@
 				INFOPLIST_FILE = VoiceflowDesktop/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.voiceflow.desktop;
@@ -481,7 +485,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -504,7 +508,7 @@
 				INFOPLIST_FILE = VoiceflowDesktop/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 0.3.0;
+				MARKETING_VERSION = 0.4.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

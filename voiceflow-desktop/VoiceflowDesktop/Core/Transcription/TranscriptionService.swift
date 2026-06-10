@@ -31,7 +31,7 @@ final class TranscriptionService {
 
     private let client = OpenAIClient.shared
 
-    func transcribe(audio: RecordedAudio, language: LanguageSelection) async throws -> TranscriptionResult {
+    func transcribe(audio: RecordedAudio, language: LanguageSelection, model: String) async throws -> TranscriptionResult {
         guard let apiKey = KeychainStore.apiKey else {
             throw OpenAIError.missingAPIKey
         }
@@ -50,14 +50,13 @@ final class TranscriptionService {
             usedLocale = lang.rawValue
         }
 
-        let started = Date()
         let result = try await client.transcribe(
             audioData: audioData,
             fileExt: fileExt,
             languageCode: languageCode,
+            model: model,
             apiKey: apiKey
         )
-        NSLog("[VF-Transcribe] %.2fs for %d KB", Date().timeIntervalSince(started), audioData.count / 1024)
 
         guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw TranscriptionError.emptyTranscript

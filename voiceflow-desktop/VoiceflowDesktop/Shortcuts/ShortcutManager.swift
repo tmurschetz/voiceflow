@@ -7,22 +7,13 @@ import KeyboardShortcuts
 extension KeyboardShortcuts.Name {
     static let dictatePrivate  = Self("dictate_private")
     static let dictateBusiness = Self("dictate_business")
-    static let dictateCalm     = Self("dictate_calm")
+    static let dictateRandom   = Self("dictate_random")
 }
 
 /// Manages global keyboard shortcuts for the three dictation modes.
 ///
-/// Shortcuts are stored in the DB as plain strings (e.g. "⌘⌥P").
-/// The actual key binding is managed by KeyboardShortcuts, which persists
-/// bindings in UserDefaults under the shortcut name. The DB value is the
-/// canonical source of truth shown to the user; the framework binding is
-/// what actually fires.
-///
-/// Integration pattern:
-///   - Settings UI uses KeyboardShortcuts.Recorder — user picks a combo in the UI
-///   - On save, we read the current binding as a display string and store it in DB
-///   - On startup, we read from DB (if non-empty) but let the framework use its
-///     own persisted binding (they should match after a save)
+/// Bindings are persisted by the KeyboardShortcuts framework in UserDefaults;
+/// AppSettings stores only the display strings shown in the status panel.
 final class ShortcutManager {
 
     static let shared = ShortcutManager()
@@ -33,25 +24,40 @@ final class ShortcutManager {
     // MARK: - Registration
 
     /// Bind the mode handler and activate all three shortcuts.
-    /// Called once at startup from AppDelegate. The KeyboardShortcuts framework
-    /// persists the actual key combos in UserDefaults via KeyboardShortcuts.Recorder —
-    /// we must NOT call reset() here as that would wipe those persisted bindings.
+    /// Called once at startup. Must NOT call reset() — that would wipe the
+    /// user's persisted key bindings.
     func register(settings: AppSettings, handler: @escaping (ProcessingMode) -> Void) {
+        migrateLegacyCalmBinding()
         self.handler = handler
         attachHandlers()
     }
 
-    /// Re-attach handlers to the currently persisted key bindings.
-    /// Call after settings are saved so the handler stays live.
-    /// Does NOT touch key bindings — the Recorder already persisted them in UserDefaults.
+    /// Re-attach handlers after settings changes.
     func reattachHandlers() {
         attachHandlers()
     }
 
-    /// Removes key bindings AND handlers — call only on sign-out.
+    /// Removes key bindings AND handlers — used by the uninstaller.
     func unregisterAll() {
-        KeyboardShortcuts.reset(.dictatePrivate, .dictateBusiness, .dictateCalm)
+        KeyboardShortcuts.reset(.dictatePrivate, .dictateBusiness, .dictateRandom)
         handler = nil
+    }
+
+    // MARK: - 0.3.x migration (calm → random)
+
+    /// The third mode was renamed from "calm" to "random". KeyboardShortcuts
+    /// persists bindings under "KeyboardShortcuts_<name>" — copy the old
+    /// binding once so the user's shortcut survives the rename.
+    private func migrateLegacyCalmBinding() {
+        let defaults = UserDefaults.standard
+        let oldKey = "KeyboardShortcuts_dictate_calm"
+        let newKey = "KeyboardShortcuts_dictate_random"
+        if defaults.object(forKey: newKey) == nil,
+           let legacy = defaults.object(forKey: oldKey) {
+            defaults.set(legacy, forKey: newKey)
+            defaults.removeObject(forKey: oldKey)
+            NSLog("[ShortcutManager] Migrated calm → random shortcut binding")
+        }
     }
 
     // MARK: - Private
@@ -63,28 +69,24 @@ final class ShortcutManager {
         KeyboardShortcuts.onKeyDown(for: .dictateBusiness) { [weak self] in
             self?.handler?(.business)
         }
-        KeyboardShortcuts.onKeyDown(for: .dictateCalm) { [weak self] in
-            self?.handler?(.calm)
+        KeyboardShortcuts.onKeyDown(for: .dictateRandom) { [weak self] in
+            self?.handler?(.random)
         }
     }
 
-    // MARK: - Current Combo Strings (for saving to DB)
+    // MARK: - Current Combo Strings (for display)
 
-    /// Returns the current shortcut display strings in the order [private, business, calm].
-    /// Used when saving settings to write back to the DB.
     @MainActor
-    func currentCombos() -> (private: String, business: String, calm: String) {
+    func currentCombos() -> (private: String, business: String, random: String) {
         return (
             private:  descriptionFor(.dictatePrivate),
             business: descriptionFor(.dictateBusiness),
-            calm:     descriptionFor(.dictateCalm)
+            random:   descriptionFor(.dictateRandom)
         )
     }
 
     @MainActor
     private func descriptionFor(_ name: KeyboardShortcuts.Name) -> String {
-        // KeyboardShortcuts.getShortcut(for:) returns the currently registered combo.
-        // .description produces a human-readable string like "⌥⌘P".
         guard let shortcut = KeyboardShortcuts.getShortcut(for: name) else { return "" }
         return shortcut.description
     }

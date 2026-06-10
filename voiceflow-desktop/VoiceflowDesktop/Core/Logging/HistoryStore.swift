@@ -68,6 +68,16 @@ final class HistoryStore {
         }
     }
 
+    // MARK: - Delete
+
+    /// Deletes the entire history file. Used by Settings ("Verlauf löschen")
+    /// and the uninstaller.
+    func clear() {
+        queue.async { [fileURL] in
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+    }
+
     // MARK: - Read
 
     /// Returns the most recent entries (newest first). Reads the whole file —

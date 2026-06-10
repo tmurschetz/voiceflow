@@ -35,13 +35,16 @@ enum SnapshotMode {
         var settings = AppSettings()
         settings.shortcutPrivate  = "⌥1"
         settings.shortcutBusiness = "⌥2"
-        settings.shortcutCalm     = "⌥3"
+        settings.shortcutRandom   = "⌥3"
 
         var specs: [Spec] = [
             Spec(name: "onboarding", size: NSSize(width: 460, height: 520),
                  view: AnyView(OnboardingView(viewModel: OnboardingViewModel()))),
-            Spec(name: "settings", size: NSSize(width: 560, height: 680),
-                 view: AnyView(SettingsView(viewModel: SettingsViewModel(settingsService: SettingsService()))))
+            Spec(name: "settings", size: NSSize(width: 580, height: 720),
+                 view: AnyView(SettingsView(viewModel: SettingsViewModel(settingsService: SettingsService())))),
+            // Full-height variant so design review sees every section without scrolling.
+            Spec(name: "settings-full", size: NSSize(width: 580, height: 1540),
+                 view: AnyView(SettingsScrollProbe()))
         ]
 
         let panelStates: [(String, AppState, String?)] = [
@@ -69,6 +72,14 @@ enum SnapshotMode {
             NSApp.terminate(nil)
         }
         return true
+    }
+
+    /// Tall, non-scrolling rendering of the Settings form for design review.
+    private struct SettingsScrollProbe: View {
+        var body: some View {
+            SettingsView(viewModel: SettingsViewModel(settingsService: SettingsService()),
+                         height: 1540)
+        }
     }
 
     /// Hosts the view in an off-screen window, waits for SwiftUI layout to

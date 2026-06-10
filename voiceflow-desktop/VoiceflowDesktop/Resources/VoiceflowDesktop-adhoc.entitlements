@@ -5,11 +5,16 @@
     <!--
         Ad-hoc build entitlements (no Developer ID / provisioning profile).
 
-        com.apple.security.cs.disable-library-validation:
-            Allows loading embedded frameworks (Sparkle) that are signed with a
-            different identity than the main executable.  Required on macOS 14+
-            with Hardened Runtime when the app is ad-hoc signed (Team ID = "")
-            but embedded frameworks carry a third-party Team ID.
+        Security review notes (2026-06-10):
+        - com.apple.security.cs.disable-library-validation is required because
+          the embedded KeyboardShortcuts.framework is re-signed ad-hoc (Team ID
+          = none) while Hardened Runtime enforces Team-ID-matched libraries on
+          macOS 14+. Remove this once the app ships with a real Developer ID.
+        - network.client is used EXCLUSIVELY for https://api.openai.com
+          (transcription, chat, key validation). There is no other endpoint.
+        - No app sandbox in the ad-hoc beta: the accessibility temporary
+          exception and CGEvent posting require it disabled. Revisit for a
+          notarized release.
 
         Do NOT use these entitlements for App Store or notarized builds —
         use VoiceflowDesktop.entitlements with a real Developer ID instead.
@@ -17,7 +22,7 @@
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
 
-    <!-- Network access (Supabase REST API + auth) -->
+    <!-- Network access: api.openai.com only -->
     <key>com.apple.security.network.client</key>
     <true/>
 

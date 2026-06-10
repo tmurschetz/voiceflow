@@ -188,9 +188,9 @@ private struct ShortcutsHintView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    ShortcutLine(icon: "person.fill",    color: .blue,   label: "Private",  combo: s.shortcutPrivate)
+                    ShortcutLine(icon: "person.fill",    color: .blue,   label: "Privat",   combo: s.shortcutPrivate)
                     ShortcutLine(icon: "briefcase.fill", color: .indigo, label: "Business", combo: s.shortcutBusiness)
-                    ShortcutLine(icon: "leaf.fill",      color: .teal,   label: "Calm",     combo: s.shortcutCalm)
+                    ShortcutLine(icon: "sparkles",       color: .pink,   label: "Random",   combo: s.shortcutRandom)
                 }
             } else {
                 Text("Shortcuts in den Einstellungen festlegen")
