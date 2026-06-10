@@ -197,6 +197,47 @@ final class OpenAIClient {
     }
 }
 
+// MARK: - Retry events (shared by both pipeline stages)
+
+/// Events fired during a retry cycle so the UI can show a countdown.
+enum PipelineRetryEvent: Sendable {
+    case willRetryIn(seconds: Int, attempt: Int, total: Int)
+    case retrying(attempt: Int, total: Int)
+}
+
+// MARK: - Retry classification (shared by both pipeline stages)
+
+/// Decides whether an error is transient and worth retrying. Used by both the
+/// transcription stage and the rewrite stage so the whole pipeline behaves
+/// consistently: 429/5xx + transport-level failures retry; auth/4xx surface.
+enum OpenAIRetry {
+    static func isRetryable(_ error: Error) -> Bool {
+        if let apiError = error as? OpenAIError {
+            switch apiError {
+            case .httpError(let code, _) where code == 429 || (500..<600).contains(code):
+                return true
+            case .invalidResponse, .emptyResult:
+                return true
+            default:
+                return false
+            }
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .cannotFindHost, .cannotConnectToHost,
+                 .networkConnectionLost, .notConnectedToInternet,
+                 .dnsLookupFailed, .resourceUnavailable, .badServerResponse,
+                 .secureConnectionFailed, .cannotLoadFromNetwork, .dataNotAllowed:
+                return true
+            default:
+                return false
+            }
+        }
+        if error is DecodingError { return true }
+        return false
+    }
+}
+
 // MARK: - Errors
 
 enum OpenAIError: LocalizedError {

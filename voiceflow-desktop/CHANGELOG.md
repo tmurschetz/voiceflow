@@ -20,6 +20,29 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.0.1] — 2026-06-10
+
+### Fixed
+- **Recordings could still be lost when the transcription stage failed.** The
+  rewrite stage had retry + fallback since 0.2.x, but a timeout/429/5xx on the
+  transcription call threw straight to the error state and the audio file was
+  deleted. The transcription stage now retries once with the same visible
+  5-second countdown.
+- **Failed recordings are rescued, never deleted.** If the pipeline still fails
+  after retries, the audio file is moved to
+  `~/Library/Application Support/Voiceflow/Rescue/` (capped at the 5 most
+  recent) and the status panel shows a "Gerettete Aufnahme … Erneut versuchen"
+  row — which survives an app restart. Retrying re-runs the full pipeline and
+  delivers the result to the clipboard (the original cursor position is gone by
+  then). The error state now says "Aufnahme gerettet" instead of silently
+  discarding your words.
+
+### Performance
+- OpenAI Predicted Outputs on the rewrite step (~25–40 % lower latency for
+  Privat/Business; benchmarked 1.40 s → 1.03 s on a real dictation).
+
+---
+
 ## [1.0.0] — 2026-06-10
 
 **First stable release.** Functionally identical to 0.4.0 — this release marks

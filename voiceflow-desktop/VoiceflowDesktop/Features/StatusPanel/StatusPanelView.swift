@@ -8,6 +8,7 @@ struct StatusPanelView: View {
     @ObservedObject var viewModel: StatusPanelViewModel
     var onSettings: () -> Void
     var onQuit: () -> Void
+    var onRetryRescue: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,6 +39,27 @@ struct StatusPanelView: View {
                 ShortcutsHintView(settings: viewModel.settings, onSettings: onSettings)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                Divider().padding(.horizontal, 12)
+            }
+
+            // Rescued recording awaiting retry
+            if let rescued = viewModel.rescuedDescription, canRetryRescue {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Gerettete Aufnahme")
+                            .font(.callout.weight(.medium))
+                        Text(rescued)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Erneut versuchen") { onRetryRescue() }
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 Divider().padding(.horizontal, 12)
             }
 
@@ -78,6 +100,14 @@ struct StatusPanelView: View {
         }
         .frame(width: 300)
         .background(.regularMaterial)
+    }
+
+    /// Retry is offered while the app is not busy with another dictation.
+    private var canRetryRescue: Bool {
+        switch viewModel.state {
+        case .idle, .error, .successWithRawFallback: return true
+        default: return false
+        }
     }
 }
 

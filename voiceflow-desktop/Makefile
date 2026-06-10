@@ -10,7 +10,7 @@ BUILD    = .build
 APP      = $(BUILD)/Release/$(APP_NAME).app
 DMG      = $(APP_NAME)-$(VERSION).dmg
 
-VERSION  = 1.0.0
+VERSION  = 1.0.1
 
 .PHONY: generate open dev build clean \
         build-release dmg install \
