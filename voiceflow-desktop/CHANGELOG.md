@@ -20,6 +20,24 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.0.0] — 2026-06-10
+
+**First stable release.** Functionally identical to 0.4.0 — this release marks
+the app as ready to hand to other people.
+
+### Added
+- English README and INSTALL.md aimed at end users receiving the DMG,
+  including the one-time Keychain "Always Allow" step and the Gatekeeper
+  right-click → Open flow.
+- DMG artifact is now versioned (`Voiceflow-1.0.0.dmg`).
+
+### Notes for testers
+- The build is ad-hoc signed: first launch requires right-click → Open, and
+  the Keychain prompt appears once — click "Always Allow".
+- No auto-update yet; new versions ship via the GitHub Releases page.
+
+---
+
 ## [0.4.0] — 2026-06-10
 
 ### Changed (modes)

@@ -8,9 +8,9 @@ BUILD    = .build
 
 # Paths derived from configuration
 APP      = $(BUILD)/Release/$(APP_NAME).app
-DMG      = $(APP_NAME)-beta.dmg
+DMG      = $(APP_NAME)-$(VERSION).dmg
 
-VERSION  = 0.4.0
+VERSION  = 1.0.0
 
 .PHONY: generate open dev build clean \
         build-release dmg install \
