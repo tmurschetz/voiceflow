@@ -25,6 +25,7 @@
 		9BF714C42461818F5C317E3F /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F3DF5D8238CBCF9FFA3DC7 /* MenuBarController.swift */; };
 		9FFDDCED614C4AB971B5FDAB /* OutputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80DCE96D78B121E661317F8E /* OutputService.swift */; };
 		ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69200CC3359B433509E3E7C5 /* KeychainStore.swift */; };
+		AEB7AF041A80190ACA9F329A /* SnapshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */; };
 		BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */; };
 		C81E7932DD337171B42A703D /* RecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF41F43ECF611F7DF15B6D /* RecordingService.swift */; };
 		D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */; };
@@ -46,6 +47,7 @@
 		6E79A466290CA8761E783FAE /* ModeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeProcessor.swift; sourceTree = "<group>"; };
 		768F27D8149E7D8144BAD286 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
 		79F3DF5D8238CBCF9FFA3DC7 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotMode.swift; sourceTree = "<group>"; };
 		80DCE96D78B121E661317F8E /* OutputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputService.swift; sourceTree = "<group>"; };
 		88CF41F43ECF611F7DF15B6D /* RecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingService.swift; sourceTree = "<group>"; };
 		9694776FC320681A74AFC58C /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 			isa = PBXGroup;
 			children = (
 				FA1019C2601FF3C184A5A05C /* AppDelegate.swift */,
+				7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */,
 				2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */,
 			);
 			path = App;
@@ -351,6 +354,7 @@
 				4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */,
 				80681A89C12E9E70ADD966D2 /* SettingsViewModel.swift in Sources */,
 				08F8F8268F17A6BB579C29A4 /* ShortcutManager.swift in Sources */,
+				AEB7AF041A80190ACA9F329A /* SnapshotMode.swift in Sources */,
 				25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */,
 				0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */,
 				EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */,
@@ -412,7 +416,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -477,7 +481,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;

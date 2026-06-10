@@ -39,6 +39,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Headless UI-snapshot mode (--snapshot <dir>) — renders screens to PNG
+        // asynchronously and terminates itself when done.
+        if SnapshotMode.runIfRequested() {
+            return
+        }
+
         menuBarController = MenuBarController(delegate: self)
         resetAXPromptIfNewBuild()
 
@@ -203,12 +209,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Refresh the key status shown in an already-open Settings window next time.
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 420),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 520),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Voiceflow — Setup"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.center()
         window.contentView = NSHostingView(rootView: OnboardingView(viewModel: vm))
         window.isReleasedWhenClosed = false
@@ -221,8 +229,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindowController == nil {
             let vm = SettingsViewModel(settingsService: settingsService)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 520, height: 620),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                contentRect: NSRect(x: 0, y: 0, width: 560, height: 680),
+                styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered,
                 defer: false
             )

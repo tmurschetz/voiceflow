@@ -34,11 +34,12 @@ except ImportError:
 # Apple-style squircle: superellipse with exponent n. n=5 matches macOS icons closely.
 SQUIRCLE_N = 5.0
 # Padding from canvas edge as a fraction of canvas size.
-# Apple's macOS icons use ~10%, but generated icons (Nano Banana, DALL-E) often
-# bake the squircle close to the canvas edge already. 2.5% gives a tight mask
-# that covers the source squircle without leaving a rim of original artwork.
-# Override at runtime: VF_ICON_PADDING=0.03 ./scripts/squircle-mask.py …
-PADDING_RATIO = float(os.environ.get("VF_ICON_PADDING", "0.025"))
+# Measured against the Nano Banana source via pixel probing: the baked-in fake
+# transparency checkerboard extends to ~10.7% of the canvas before the real
+# squircle starts, so the mask insets 11% to land on pure artwork. This also
+# matches Apple's ~10% icon margin guideline.
+# Override at runtime: VF_ICON_PADDING=0.08 ./scripts/squircle-mask.py …
+PADDING_RATIO = float(os.environ.get("VF_ICON_PADDING", "0.11"))
 
 
 def make_squircle_mask(size: int, n: float = SQUIRCLE_N, pad: int = 0) -> Image.Image:

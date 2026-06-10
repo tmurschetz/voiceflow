@@ -38,48 +38,52 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Hero
-            VStack(spacing: 10) {
-                if let appIcon = NSImage(named: "AppIcon") ?? NSApp.applicationIconImage {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .frame(width: 76, height: 76)
+            // Gradient hero — matches the app icon's indigo→blue
+            ZStack {
+                LinearGradient(
+                    colors: [Color(red: 0.24, green: 0.18, blue: 0.67),
+                             Color(red: 0.29, green: 0.56, blue: 1.0)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                VStack(spacing: 12) {
+                    if let appIcon = NSImage(named: "AppIcon") ?? NSApp.applicationIconImage {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .frame(width: 84, height: 84)
+                            .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+                    }
+                    Text("Willkommen bei Voiceflow")
+                        .font(.title.bold())
+                        .foregroundStyle(.white)
+                    Text("Diktieren in jeder App — schnell, in deinem Ton.")
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.85))
                 }
-                Text("Willkommen bei Voiceflow")
-                    .font(.title2.bold())
-                Text("Diktieren in jeder App — mit deinem eigenen OpenAI-Konto.\nKein Login, keine Cloud dazwischen: dein Key bleibt im Schlüsselbund dieses Macs.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 36)
             }
-            .padding(.top, 28)
-            .padding(.horizontal, 32)
-            .padding(.bottom, 22)
+            .frame(height: 220)
 
-            Divider()
-
-            // Key entry
-            VStack(alignment: .leading, spacing: 10) {
-                Text("OpenAI API-Key")
-                    .font(.callout.bold())
-
-                SecureField("sk-…", text: $viewModel.apiKey)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                    .onSubmit { Task { await viewModel.submit() } }
-
-                HStack(spacing: 4) {
-                    Text("Noch keinen Key?")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("Auf platform.openai.com erstellen") {
-                        if let url = URL(string: Config.apiKeysURL) {
-                            NSWorkspace.shared.open(url)
-                        }
+            // Steps + key entry
+            VStack(alignment: .leading, spacing: 18) {
+                StepRow(number: "1", title: "OpenAI API-Key erstellen",
+                        subtitle: "Einmalig auf platform.openai.com — dauert eine Minute.") {
+                    Button("Key erstellen ↗") {
+                        if let url = URL(string: Config.apiKeysURL) { NSWorkspace.shared.open(url) }
                     }
                     .buttonStyle(.link)
-                    .font(.caption)
+                    .font(.callout)
+                }
+
+                StepRow(number: "2", title: "Key hier einfügen",
+                        subtitle: "Bleibt im Schlüsselbund dieses Macs — kein Login, keine Cloud dazwischen.") {
+                    HStack(spacing: 8) {
+                        SecureField("sk-…", text: $viewModel.apiKey)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.body.monospaced())
+                            .onSubmit { Task { await viewModel.submit() } }
+                    }
                 }
 
                 if let error = viewModel.errorMessage {
@@ -87,36 +91,73 @@ struct OnboardingView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 34)
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 28)
+            .padding(.vertical, 24)
+
+            Spacer(minLength: 0)
 
             Divider()
 
             // Footer
             HStack {
-                Text("Kosten: ~0.3 Rappen pro Diktatminute")
+                Label("~0.3 Rappen pro Diktatminute", systemImage: "creditcard")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                 Spacer()
                 Button {
                     Task { await viewModel.submit() }
                 } label: {
-                    if viewModel.isValidating {
-                        HStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        if viewModel.isValidating {
                             ProgressView().controlSize(.small)
                             Text("Prüfe…")
+                        } else {
+                            Text("Loslegen")
+                            Image(systemName: "arrow.right")
                         }
-                    } else {
-                        Text("Key prüfen & loslegen")
                     }
+                    .padding(.horizontal, 4)
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(!viewModel.canSubmit)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .frame(width: 440)
+        .frame(width: 460, height: 520)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+// MARK: - Step row
+
+private struct StepRow<Content: View>: View {
+    let number: String
+    let title: String
+    let subtitle: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(number)
+                .font(.callout.bold())
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.accentColor.gradient))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                content
+            }
+        }
     }
 }
