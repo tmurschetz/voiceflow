@@ -16,6 +16,7 @@
 		3DC8DB85150464756A686D99 /* RescueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E54FA4A154C550C8E6FA3B /* RescueStore.swift */; };
 		3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79A466290CA8761E783FAE /* ModeProcessor.swift */; };
 		3FA7FB275C280983C9C22AA2 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3859001B87688555C43F1897 /* OnboardingView.swift */; };
+		42894528E3434A8A4C139D12 /* SelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE2A4BFB30B525DC9348755 /* SelfTest.swift */; };
 		4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C203490056D9249E43F16113 /* SettingsView.swift */; };
 		4D4F01FC9ACA55E62478A8A9 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7563138D9880266FA772ECF /* AppInfo.swift */; };
 		5ECE84548F90AFA7E7C65828 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A9F2E671A9B5B1A61F6F7B /* PermissionsManager.swift */; };
@@ -55,6 +56,7 @@
 		88CF41F43ECF611F7DF15B6D /* RecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingService.swift; sourceTree = "<group>"; };
 		9694776FC320681A74AFC58C /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		986870957B3F79F64AE93655 /* SettingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsService.swift; sourceTree = "<group>"; };
+		9CE2A4BFB30B525DC9348755 /* SelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTest.swift; sourceTree = "<group>"; };
 		A0C8A93DE5C2E1C773207B17 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		C203490056D9249E43F16113 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -179,6 +181,7 @@
 			isa = PBXGroup;
 			children = (
 				FA1019C2601FF3C184A5A05C /* AppDelegate.swift */,
+				9CE2A4BFB30B525DC9348755 /* SelfTest.swift */,
 				7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */,
 				2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */,
 			);
@@ -357,6 +360,7 @@
 				5ECE84548F90AFA7E7C65828 /* PermissionsManager.swift in Sources */,
 				C81E7932DD337171B42A703D /* RecordingService.swift in Sources */,
 				3DC8DB85150464756A686D99 /* RescueStore.swift in Sources */,
+				42894528E3434A8A4C139D12 /* SelfTest.swift in Sources */,
 				DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */,
 				4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */,
 				80681A89C12E9E70ADD966D2 /* SettingsViewModel.swift in Sources */,
@@ -424,7 +428,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -489,7 +493,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;

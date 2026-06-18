@@ -45,6 +45,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Headless functional self-test (--selftest [audio]) — exercises the real
+        // pipeline and exits with a pass/fail report.
+        if SelfTest.runIfRequested() {
+            return
+        }
+
         menuBarController = MenuBarController(delegate: self)
         resetAXPromptIfNewBuild()
 
