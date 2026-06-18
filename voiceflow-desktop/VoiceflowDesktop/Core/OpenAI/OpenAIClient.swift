@@ -16,10 +16,18 @@ final class OpenAIClient {
 
     static let shared = OpenAIClient()
 
+    /// Per-request "no data received" timeout. A healthy dictation request
+    /// returns in <2 s (benchmarked); even a 2-minute dictation's processing
+    /// stays well under this. So 20 s of total silence means the connection is
+    /// dead (WiFi packet loss / a stale pooled connection), not slow — fail fast
+    /// and let the retry layer reconnect, instead of hanging up to 45–120 s.
+    static let requestTimeout: TimeInterval = 20
+
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 45   // generous for long dictations
-        config.timeoutIntervalForResource = 120
+        config.timeoutIntervalForRequest = requestTimeout   // stall detection (resets per packet)
+        config.timeoutIntervalForResource = 40              // hard ceiling per attempt
+        config.waitsForConnectivity = false                 // fail immediately when offline; don't hang
         // TLS 1.2+ only (1.3 is negotiated automatically when available).
         config.tlsMinimumSupportedProtocolVersion = .TLSv12
         return URLSession(configuration: config)
@@ -98,6 +106,7 @@ final class OpenAIClient {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
+        req.timeoutInterval = Self.requestTimeout
 
         let started = Date()
         let (data, response) = try await session.data(for: req)
@@ -161,6 +170,7 @@ final class OpenAIClient {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)
+        req.timeoutInterval = Self.requestTimeout
 
         let started = Date()
         let (data, response) = try await session.data(for: req)

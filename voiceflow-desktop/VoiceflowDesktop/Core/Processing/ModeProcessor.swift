@@ -114,7 +114,10 @@ final class ModeProcessor {
     typealias RetryEvent = PipelineRetryEvent
 
     private static let maxAttempts = 2
-    private static let retryDelaySeconds = 5
+    /// Short delay: a stalled request is best retried quickly on a fresh
+    /// connection. (The longer 5 s wait made sense only for a full server
+    /// outage, which the raw-transcript fallback already covers.)
+    private static let retryDelaySeconds = 2
 
     // MARK: - Process
 
