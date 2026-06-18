@@ -20,6 +20,33 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.0.5] — 2026-06-18
+
+### Changed — Random mode is now purely instruction-driven
+- Random previously inherited the same "default style" block as Privat/Business,
+  including the Swiss-Standard-German language default and "don't add anything
+  that wasn't said". That fought free-form instructions and biased output toward
+  (Swiss) German even when the instruction wanted something else.
+- Now:
+  - **No instruction → Random behaves exactly like Privat** (light cleanup).
+  - **With an instruction → the instruction is the complete spec**: it alone
+    decides language, tone, length, formatting and additions. No default style is
+    imposed. So "keep German, add emojis and a swear word", "translate to
+    English", or "write in Zürich dialect" each do exactly that — nothing more.
+- The only rule that still always holds for Random: the dictation is transformed,
+  never *answered* (a dictated question/command is restyled, not replied to or
+  executed). Restyling/translating/reformatting/adding per the instruction is
+  explicitly allowed.
+- Swiss-German output is no longer a Random default — it happens only when the
+  instruction asks for it.
+
+### Tests
+- Self-test (`--selftest`) extended to 21 checks, covering Random with an
+  emoji/swear instruction (stays German), a translation instruction (→ English),
+  and an empty instruction (= Privat). All green.
+
+---
+
 ## [1.0.4] — 2026-06-18
 
 ### Fixed — the app answered the dictation instead of cleaning it up

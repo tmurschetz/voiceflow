@@ -143,6 +143,34 @@ enum SelfTest {
             check("Bleibt eine Frage", out.contains("?"), detail: "Output: \(out)")
         }
 
+        // 8. Random is purely instruction-driven — creative instruction, Hochdeutsch IN.
+        //    Instruction: keep German, add emoji + swear words. Must NOT turn Swiss-German.
+        print("\n[8] Random — freie Instruktion (Emojis + Kraftausdrücke, Hochdeutsch bleibt)")
+        let funInstr = "Behalte die Sprache des Inputs bei. Füge passende Emojis ein und mach den Ton frech mit ein, zwei Kraftausdrücken."
+        if let out = await process(processor, "der drucker funktioniert schon wieder nicht und ich bin spät dran",
+                                   mode: .random, instruction: funInstr, textModel: textModel) {
+            let hasEmoji = out.unicodeScalars.contains { $0.properties.isEmoji && $0.value > 0x238C }
+            check("Emoji eingefügt (Instruktion befolgt)", hasEmoji, detail: "Output: \(out)")
+            check("Nicht nach Schweizerdeutsch übersetzt", dialectScore(out) <= 1,
+                  detail: "score \(dialectScore(out)) — Output: \(out)")
+        }
+
+        // 9. Random with a translation instruction → output language switches.
+        print("\n[9] Random — Übersetzungs-Instruktion (Deutsch → Englisch)")
+        if let out = await process(processor, "bitte schick mir die unterlagen bis morgen mittag",
+                                   mode: .random, instruction: "Translate the text to English.", textModel: textModel) {
+            let looksEnglish = out.lowercased().contains("the ") || out.lowercased().contains("please") || out.lowercased().contains("documents")
+            check("Auf Englisch übersetzt", looksEnglish, detail: "Output: \(out)")
+        }
+
+        // 10. Random with NO instruction → must behave like Privat (light cleanup, Hochdeutsch).
+        print("\n[10] Random — ohne Instruktion (= wie Privat)")
+        if let out = await process(processor, "also ähm ich glaub das passt so für mich",
+                                   mode: .random, instruction: "", textModel: textModel) {
+            check("Füllwörter entfernt", !out.lowercased().contains("ähm"))
+            check("Hochdeutsch (kein Dialekt, keine Emojis)", dialectScore(out) <= 1)
+        }
+
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")
         return failed == 0
