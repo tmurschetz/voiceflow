@@ -20,6 +20,23 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.0.4] — 2026-06-18
+
+### Fixed — the app answered the dictation instead of cleaning it up
+- Regression from 1.0.3's prompt restructuring: when a dictation was phrased as
+  a question ("wie spät ist es") or a command ("mach mir eine Liste"), the model
+  treated it as a message to it and **answered/executed it** instead of just
+  tidying the text — in all three modes.
+- Fix: the dictated text is now passed to the model wrapped in explicit
+  `<<<DICTATION>>> … <<<END>>>` delimiters, and the prompt's absolute rules state
+  that this block is raw content to rewrite, never a question/command addressed
+  to the model. Verified across question-, command- and statement-style inputs
+  in all modes; dialect output (1.0.3) still works.
+- The Predicted-Outputs speed hint now uses the raw dictation, not the wrapped
+  message, so the latency optimisation is unaffected.
+
+---
+
 ## [1.0.3] — 2026-06-18
 
 ### Fixed — custom instructions could not change the output language/dialect

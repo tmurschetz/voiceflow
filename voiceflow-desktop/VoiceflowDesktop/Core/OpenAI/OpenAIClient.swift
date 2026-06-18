@@ -134,8 +134,12 @@ final class OpenAIClient {
     /// ~25–40 % lower latency on real dictations. Disable for transformations
     /// where the output diverges heavily (e.g. Random mode with a translation
     /// instruction): rejected prediction tokens cost extra and save nothing.
+    /// `predictionText`: when set, used as the Predicted-Outputs hint instead of
+    /// `userText`. Needed because `userText` may be wrapped in dictation
+    /// delimiters, while the actual output (and thus the useful prediction) is
+    /// the raw dictation without delimiters.
     func chat(systemPrompt: String, userText: String, model: String, apiKey: String,
-              predictOutput: Bool = true) async throws -> String {
+              predictOutput: Bool = true, predictionText: String? = nil) async throws -> String {
         struct Message: Codable { let role: String; let content: String }
         struct Prediction: Encodable {
             let type = "content"
@@ -162,7 +166,7 @@ final class OpenAIClient {
                 Message(role: "user", content: userText)
             ],
             temperature: 0.3,
-            prediction: predictOutput ? Prediction(content: userText) : nil
+            prediction: predictOutput ? Prediction(content: predictionText ?? userText) : nil
         )
 
         var req = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
