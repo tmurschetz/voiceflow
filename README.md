@@ -39,11 +39,12 @@ party's server.
     self-corrections applied, your wording preserved
   - **Business** — polished, professional register (Swiss business German for
     German input, professional English for English)
-  - **Random** — *your* rules: drive it with any instruction, e.g.
-    *"translate everything to English"*, *"format as a bullet list"*, or
-    *"write in Zürich dialect"*
+  - **Random** — purely instruction-driven: it does exactly what its instruction
+    says (e.g. *"translate to English"*, *"add emojis and a swear word"*,
+    *"write in Zürich dialect"*), and falls back to Privat-style cleanup when the
+    instruction is empty. See [Modes & custom instructions](#modes--custom-instructions).
 - **Custom instruction per mode** — personalise the output; the instruction is
-  applied on every dictation and even controls the output language or dialect
+  applied on every dictation and can control tone, language, dialect or formatting
 - **Fast** — `gpt-4o-mini-transcribe` (roughly half the price and latency of
   Whisper), 16 kHz speech-optimized recording, and the connection is pre-warmed
   while you speak. A typical dictation is ready in ~2 seconds.
@@ -92,6 +93,55 @@ Shortcut ▸ record  →  OpenAI transcription  →  AI cleanup in your chosen t
 
 Everything runs on your Mac and your OpenAI key. The two steps are independent and
 each retries on a hiccup, so a flaky moment never costs you a dictation.
+
+## Modes & custom instructions
+
+Each of the three modes has its own global shortcut **and** an optional free-text
+instruction (Settings → Modi) that personalises its output. The instruction is
+sent to the AI on every dictation.
+
+### Privat
+Light cleanup only — fixes punctuation and capitalisation, removes filler words
+(„ähm", „äh"…), applies self-corrections, and keeps your exact wording, meaning
+and tone. German/Swiss-German speech comes out as Swiss Standard German; English
+stays English. A custom instruction can fine-tune it (e.g. *"always write numbers
+as digits"*).
+
+### Business
+Rewrites your dictation into a polished, professional register — direct and
+concise, Swiss business German for German input, professional English for English.
+Same length and format as what you said; no salutations or signatures are invented.
+A custom instruction can set house style (e.g. *"always use 'Kundinnen und Kunden'"*).
+
+### Random — purely instruction-driven
+Random does **exactly what its instruction says — nothing more.** It has no
+built-in style or language of its own:
+
+- **No instruction → it behaves like Privat** (light cleanup), so it always does
+  something sensible.
+- **With an instruction → the instruction is the complete spec.** It alone decides
+  the language, tone, length, formatting and any additions. Voiceflow does *not*
+  layer its default style on top, so nothing fights your instruction.
+
+| Your instruction | You dictate (German) | Random returns |
+|---|---|---|
+| *Behalte die Sprache bei, füge Emojis und einen Kraftausdruck ein* | „der drucker geht schon wieder nicht" | „Der Drucker geht schon wieder nicht, verdammtes Ding! 😤🖨️" |
+| *Translate everything to English* | „schick mir die unterlagen bis morgen" | „Send me the documents by tomorrow." |
+| *Schreib im Zürcher Dialekt* | „ich komme morgen ins büro" | „ich chum morn is Büro" |
+| *Mach Stichpunkte draus* | „wir brauchen milch eier und brot" | „• Milch • Eier • Brot" |
+
+> **The one rule Random always keeps:** it *transforms* your dictation, it never
+> *answers* it. If you dictate a question or a command, Random restyles those words
+> per your instruction — it doesn't reply to them or carry them out. (Translating,
+> reformatting or adding emoji per your instruction is transforming, and is fine.)
+
+So "I speak German and Swiss German comes out" is **not** a default — it only
+happens if your instruction asks for it. Want that as a permanent mode? Put the
+dialect instruction in Random and leave it there.
+
+> 💡 For the most authentic Swiss-German dialect, set the text model to **GPT-4o**
+> (Settings → Modelle → Text-Veredelung) — it writes noticeably better Mundart
+> than GPT-4o mini.
 
 ## Building from source
 
