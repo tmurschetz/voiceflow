@@ -35,20 +35,40 @@ enum ProcessingMode: String, CaseIterable {
 
     /// Builds the full system prompt for this mode, including the user's
     /// custom instruction when present.
+    ///
+    /// Prompt structure (precedence order):
+    ///   1. ABSOLUTE rule — output only the transformed text. Never overridable,
+    ///      because the app inserts the raw response into a text field; any
+    ///      preamble like "Here's your text:" would be pasted verbatim.
+    ///   2. The user's custom instruction — takes precedence over everything below.
+    ///   3. DEFAULT style (incl. the Swiss-Standard-German language default) —
+    ///      applied only where the custom instruction is silent. This is what
+    ///      lets a custom instruction say "output in Zürich dialect" and win,
+    ///      instead of being clamped to Hochdeutsch by a hard-coded rule.
     func systemPrompt(userInstruction: String) -> String {
-        let shared = """
-        Universal rules (always apply, highest priority):
-        - Respond ONLY with the transformed text. No explanations, no quotes, no preamble.
-        - Mirror the input language. German or Swiss German dialect input → output in Swiss \
-        Standard German (Schweizer Hochdeutsch): always use "ss" instead of "ß", Swiss \
-        vocabulary and phrasing. Never output dialect spelling. English input → English output.
-        - Mirror the speaker's register: if they use du/dich/dir/dein, keep Du-form; if they \
-        use Sie/Ihnen, keep Sie-form; if unclear, use Sie-form (German) or neutral (English).
-        - Apply self-corrections: when the speaker corrects themselves mid-sentence \
-        ("am Montag — nein, am Dienstag"), keep only the corrected version.
+        let instruction = userInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasInstruction = !instruction.isEmpty
+
+        let absolute = """
+        ABSOLUTE RULE (never overridable): Respond with ONLY the transformed text — \
+        no explanations, no quotes, no preamble, no commentary. This is the single rule \
+        the user's instruction below cannot change.
+        """
+
+        // Language is a DEFAULT, not a hard rule — a custom instruction may
+        // request a different output language or a spoken dialect and must win.
+        let defaults = """
+        Default style — apply each item ONLY where the user's custom instruction does not say otherwise:
+        - Output language follows the input: German or Swiss-German speech → Swiss Standard \
+        German (Schweizer Hochdeutsch, "ss" instead of "ß", Swiss vocabulary); English → English. \
+        If the custom instruction asks for a different language or for spoken Swiss-German dialect \
+        (Mundart), follow the instruction instead — including dialect spelling.
+        - Mirror the speaker's register: du/dich/dir → Du-form; Sie/Ihnen → Sie-form; if unclear, \
+        Sie-form (German) or neutral (English).
+        - Apply self-corrections: "am Montag — nein, am Dienstag" → keep only the corrected version.
         - Remove filler words (ähm, äh, halt, quasi, sozusagen, um, uh, like, you know).
-        - Never add anything that was not said: no salutations, no closings, no subject \
-        lines, no extra sentences — unless the user's custom instruction explicitly asks for it.
+        - Don't add anything that wasn't said: no salutations, closings, subject lines or extra \
+        sentences.
         - Format numbers, dates, e-mail addresses and URLs properly.
         """
 
@@ -72,22 +92,30 @@ enum ProcessingMode: String, CaseIterable {
         case .random:
             base = """
             You are a flexible text transformer for a dictation tool. Your behaviour is \
-            defined primarily by the user's custom instruction below. If no custom \
-            instruction is given, apply a light cleanup only (punctuation, fillers, \
-            self-corrections) and keep the speaker's wording.
+            defined PRIMARILY by the user's custom instruction below — follow it exactly, \
+            even when it departs from the default style (e.g. writing in spoken dialect, \
+            translating, or reformatting). If no custom instruction is given, apply a light \
+            cleanup only and keep the speaker's wording.
             """
         }
 
-        let instruction = userInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let personalisation = instruction.isEmpty ? "" : """
+        if hasInstruction {
+            // Instruction sits ABOVE the defaults and is explicitly given precedence.
+            return """
+            \(base)
 
+            \(absolute)
 
-        User's custom instruction for this mode (apply it faithfully; it overrides style \
-        defaults but never the universal rules):
-        «\(instruction)»
-        """
+            USER'S CUSTOM INSTRUCTION FOR THIS MODE — this takes PRECEDENCE over the default \
+            style below. Where it conflicts with a default (including the output language or \
+            dialect), follow the instruction:
+            «\(instruction)»
 
-        return base + "\n\n" + shared + personalisation
+            \(defaults)
+            """
+        } else {
+            return "\(base)\n\n\(absolute)\n\n\(defaults)"
+        }
     }
 }
 

@@ -20,6 +20,30 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.0.3] — 2026-06-18
+
+### Fixed — custom instructions could not change the output language/dialect
+- A custom instruction asking for spoken Swiss-German dialect (Mundart) was
+  silently overridden: the built-in prompt had a hard "always output Swiss
+  Standard German (Hochdeutsch), never output dialect spelling" rule marked as
+  a non-overridable universal rule — and the user's instruction was explicitly
+  told it "never overrides the universal rules". The two contradicted each
+  other, so dialect output was intermittent.
+- The prompt is restructured by precedence: exactly **one** absolute rule
+  (output only the transformed text — the app inserts it directly), then the
+  **user's custom instruction**, then the **default style** (incl. the
+  Swiss-Standard-German default) which now applies only where the instruction
+  is silent. A custom instruction can now reliably change the output language
+  or request spoken dialect, and the default still gives clean Hochdeutsch when
+  no instruction is set.
+
+### Note for dialect output
+- For authentic spoken dialect, the **gpt-4o** text model writes noticeably
+  better Swiss-German than gpt-4o-mini. Switch it under
+  Settings → Modelle → Text-Veredelung. (No code change — already selectable.)
+
+---
+
 ## [1.0.2] — 2026-06-18
 
 ### Fixed — performance / occasional long hangs
