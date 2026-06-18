@@ -11,6 +11,8 @@
 import AppKit
 import AVFoundation
 import CoreText
+import ImageIO
+import UniformTypeIdentifiers
 
 // MARK: - Config
 
@@ -415,6 +417,57 @@ func drawFrame(_ ctx: CGContext, time: Double) {
         let t = (time - scene.start) / (scene.end - scene.start)
         scene.draw(ctx, t)
     }
+}
+
+// MARK: - GIF export (for the README — autoplays inline on GitHub)
+//
+// When the output path ends in .gif, render a compact looping highlight instead
+// of the full MP4: a downscaled, lower-fps slice of the timeline focused on the
+// record → transform → "lands in your text field" payoff. Uses ImageIO only —
+// no dependencies. Produces a file that plays automatically in any README.
+
+if outputURL.pathExtension.lowercased() == "gif" {
+    let gifW = 900
+    let gifH = gifW * H / W                 // keep 16:9
+    let gifFPS = 12.0
+    let windowStart = 21.6                  // lead with the magic: transform → payoff
+    let windowEnd   = 35.2
+    let frameDelay  = 1.0 / gifFPS
+
+    // Precompute exact frame times so the declared count matches what we add.
+    var times: [Double] = []
+    var tt = windowStart
+    while tt < windowEnd { times.append(tt); tt += frameDelay }
+
+    let dest = CGImageDestinationCreateWithURL(
+        outputURL as CFURL, UTType.gif.identifier as CFString, times.count, nil)!
+    CGImageDestinationSetProperties(dest, [
+        kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 0]   // loop forever
+    ] as CFDictionary)
+
+    var count = 0
+    for t in times {
+        let ctx = CGContext(data: nil, width: gifW, height: gifH, bitsPerComponent: 8,
+                            bytesPerRow: 0, space: sRGB,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)!
+        ctx.scaleBy(x: CGFloat(gifW) / CGFloat(W), y: CGFloat(gifH) / CGFloat(H))
+        drawFrame(ctx, time: t)
+        if let img = ctx.makeImage() {
+            CGImageDestinationAddImage(dest, img, [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: frameDelay]
+            ] as CFDictionary)
+            count += 1
+        }
+    }
+    print("GIF: added \(count) frames, finalizing…")
+    if CGImageDestinationFinalize(dest) {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: outputURL.path)
+        let size = (attrs?[.size] as? Int) ?? 0
+        print("GIF_OK:\(outputURL.path) frames=\(count) \(gifW)x\(gifH) bytes=\(size)")
+    } else {
+        print("GIF_FAILED after \(count) frames")
+    }
+    exit(0)
 }
 
 // MARK: - Encoder
