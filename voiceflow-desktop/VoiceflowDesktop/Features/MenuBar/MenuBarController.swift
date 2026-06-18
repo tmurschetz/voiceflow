@@ -131,6 +131,9 @@ final class MenuBarController {
         statusPanelVM.recordingSeconds += 1
     }
 
+    /// Elapsed seconds of the current recording (for connection re-warming).
+    var currentRecordingSeconds: Int { statusPanelVM.recordingSeconds }
+
     // MARK: - Blink animation
 
     private func startBlinking() {

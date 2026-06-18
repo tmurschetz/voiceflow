@@ -350,7 +350,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stopRecordingTimer()
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.menuBarController?.incrementRecordingSeconds()
+                guard let self else { return }
+                self.menuBarController?.incrementRecordingSeconds()
+                // Keep the OpenAI connection alive during long recordings. The
+                // connection warmed at record-start gets closed by the server
+                // after ~60–90 s idle; without this, the transcription POST after
+                // a long dictation hits a dead connection and stalls until the
+                // timeout. Re-warming every 25 s keeps it fresh.
+                let secs = self.menuBarController?.currentRecordingSeconds ?? 0
+                if secs > 0 && secs % 25 == 0 {
+                    OpenAIClient.shared.warmUpConnection()
+                }
             }
         }
     }

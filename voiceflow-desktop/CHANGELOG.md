@@ -20,6 +20,32 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.0.2] — 2026-06-18
+
+### Fixed — performance / occasional long hangs
+- **Requests no longer hang for up to 45–120 s on a flaky connection.**
+  Diagnosis: the OpenAI API itself is fast (transcription + rewrite measure
+  ~1.4–1.8 s end-to-end). The slowness was a stalled connection waiting on the
+  old generous timeouts before failing. The unified log showed connections
+  hanging 165 s and 213 s.
+  - `timeoutIntervalForRequest` 45 s → **20 s**, `timeoutIntervalForResource`
+    120 s → **40 s**, plus an explicit 20 s timeout on each transcription/chat
+    request. A healthy request returns in <2 s, so 20 s of silence means a dead
+    connection — fail fast and retry on a fresh one instead of hanging.
+  - `waitsForConnectivity = false`: fail immediately when offline rather than
+    waiting.
+  - Retry countdown shortened 5 s → **2 s** in both pipeline stages, since a
+    stalled request is best retried quickly on a fresh connection.
+- **Long recordings stay fast.** The connection warmed at record-start gets
+  closed by the server after ~60–90 s idle; the transcription POST after a long
+  dictation then hit a dead connection and stalled. The app now re-warms the
+  connection every 25 s during recording, so it's always fresh at upload time.
+
+Net effect: worst-case recovery from a network blip drops from ~95 s+ to ~24 s,
+and a healthy dictation is unchanged at ~2 s.
+
+---
+
 ## [1.0.1] — 2026-06-10
 
 ### Fixed

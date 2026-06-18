@@ -36,7 +36,10 @@ final class TranscriptionService {
     /// single timeout/429 threw straight to the error state and the recording
     /// was discarded.
     private static let maxAttempts = 2
-    private static let retryDelaySeconds = 5
+    /// Short delay: a stalled request is best retried quickly on a fresh
+    /// connection. (The longer 5 s wait made sense only for a full server
+    /// outage, which the raw-transcript fallback already covers.)
+    private static let retryDelaySeconds = 2
 
     func transcribe(
         audio: RecordedAudio,
