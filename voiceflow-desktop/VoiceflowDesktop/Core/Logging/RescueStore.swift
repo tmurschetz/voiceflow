@@ -33,6 +33,14 @@ final class RescueStore {
     func save(fileURL: URL, mode: ProcessingMode) -> Rescued? {
         let fm = FileManager.default
         guard fm.fileExists(atPath: fileURL.path) else { return nil }
+        // Don't rescue an empty/too-short recording — there's nothing to retry,
+        // and it would otherwise stay stuck in the panel forever.
+        let size = (try? fm.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
+        if (size ?? 0) < Self.minAudioBytes {
+            try? fm.removeItem(at: fileURL)
+            return nil
+        }
+
         let date = Date()
         let name = "\(Int(date.timeIntervalSince1970))_\(mode.rawValue).\(fileURL.pathExtension)"
         let dest = dir.appendingPathComponent(name)
@@ -54,6 +62,10 @@ final class RescueStore {
         allRescued().first
     }
 
+    /// Minimum file size to be considered a real recording worth keeping.
+    /// An empty AAC/m4a container is ~557 bytes; real dictations are several KB.
+    static let minAudioBytes = 1200
+
     private func allRescued() -> [Rescued] {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return [] }
@@ -63,6 +75,13 @@ final class RescueStore {
             guard parts.count == 2,
                   let epoch = TimeInterval(parts[0]),
                   let mode = ProcessingMode(rawValue: String(parts[1])) else { return nil }
+            // Self-heal: drop any empty/too-short rescued file (e.g. one stuck
+            // from before this guard existed) so it can't sit in the panel.
+            let size = (try? fm.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            if (size ?? 0) < Self.minAudioBytes {
+                try? fm.removeItem(at: url)
+                return nil
+            }
             return Rescued(fileURL: url, mode: mode, date: Date(timeIntervalSince1970: epoch))
         }
         .sorted { $0.date > $1.date }

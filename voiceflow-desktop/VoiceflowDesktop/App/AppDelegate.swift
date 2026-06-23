@@ -182,24 +182,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             } catch {
                 stopRecordingTimer()
-                if settings?.historyEnabled ?? true {
-                    HistoryStore.shared.logFailed(mode: mode, errorMessage: error.localizedDescription)
-                }
 
-                // RESCUE the recording instead of discarding it: move the audio
-                // into the rescue folder so the user can retry from the panel —
-                // a dictation must never be lost to a transient failure.
-                var message = error.localizedDescription
-                if let failedAudio = audio,
-                   RescueStore.shared.save(fileURL: failedAudio.fileURL, mode: mode) != nil {
-                    menuBarController?.refreshRescueState()
-                    message += " — Aufnahme gerettet, im Panel «Erneut versuchen»."
-                    audio = nil   // moved — nothing left to clean up
-                }
+                // An empty recording (no audio captured) is not a failure worth
+                // rescuing — retrying it would just fail again. Show a friendly
+                // hint and move on without logging a scary failure or rescuing it.
+                let isEmptyRecording: Bool = {
+                    if case TranscriptionError.noSpeech = error { return true }
+                    return false
+                }()
 
-                await updateMenuBarState(.error(message))
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                await updateMenuBarState(.idle)
+                if isEmptyRecording {
+                    await updateMenuBarState(.error(error.localizedDescription))
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    await updateMenuBarState(.idle)
+                } else {
+                    if settings?.historyEnabled ?? true {
+                        HistoryStore.shared.logFailed(mode: mode, errorMessage: error.localizedDescription)
+                    }
+                    // RESCUE the recording instead of discarding it: move the audio
+                    // into the rescue folder so the user can retry from the panel —
+                    // a dictation must never be lost to a transient failure.
+                    var message = error.localizedDescription
+                    if let failedAudio = audio,
+                       RescueStore.shared.save(fileURL: failedAudio.fileURL, mode: mode) != nil {
+                        menuBarController?.refreshRescueState()
+                        message += " — Aufnahme gerettet, im Panel «Erneut versuchen»."
+                        audio = nil   // moved — nothing left to clean up
+                    }
+                    await updateMenuBarState(.error(message))
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    await updateMenuBarState(.idle)
+                }
             }
 
             // Clean up the temp audio file (no-op when it was rescued)

@@ -20,6 +20,27 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.0.6] — 2026-06-23
+
+### Fixed — empty recording caused a confusing error and got stuck
+- If a recording captured no audio (typically an accidental double-press of the
+  shortcut — start+stop with nothing in between), the near-empty file (~557 bytes)
+  was uploaded and OpenAI rejected it with an opaque `400 — Audio file might be
+  corrupted or unsupported`. Worse, it was saved to the rescue store, so
+  "Erneut versuchen" re-sent the same empty file and failed forever.
+- Now an empty/too-short recording is detected locally **before any upload**
+  (`TranscriptionService.isEmptyRecording`: byte floor + decoded-duration check)
+  and shows a friendly, non-retryable hint: *"Keine Sprache aufgenommen. Shortcut
+  drücken, sprechen, dann nochmals drücken."* Such recordings are no longer
+  rescued.
+- `RescueStore` self-heals: it refuses to save sub-1.2 KB files and prunes any
+  empty file already stuck in the panel on the next launch.
+
+### Tests
+- `--selftest` extended to 23 checks, including the empty-recording guard.
+
+---
+
 ## [1.0.5] — 2026-06-18
 
 ### Changed — Random mode is now purely instruction-driven
