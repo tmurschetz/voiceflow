@@ -313,22 +313,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Windows
 
+    /// Shows the first-run setup wizard (API key → models → shortcuts →
+    /// permissions). Also reopenable from the menu for users who want to revisit it.
     private func showOnboardingWindow() {
         if let existing = onboardingWindowController {
             existing.window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let vm = OnboardingViewModel()
+        let vm = SetupWizardViewModel(settingsService: settingsService)
         vm.onComplete = { [weak self] in
             guard let self else { return }
             self.onboardingWindowController?.close()
             self.onboardingWindowController = nil
-            self.menuBarController?.update(state: .idle, settings: self.settingsService.currentSettings)
-            // Refresh the key status shown in an already-open Settings window next time.
+            let settings = self.settingsService.currentSettings
+            let state: AppState = KeychainStore.hasAPIKey ? .idle : .needsAPIKey
+            self.menuBarController?.update(state: state, settings: settings)
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -337,7 +340,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.center()
-        window.contentView = NSHostingView(rootView: OnboardingView(viewModel: vm))
+        window.contentView = NSHostingView(rootView: SetupWizardView(viewModel: vm))
         window.isReleasedWhenClosed = false
         onboardingWindowController = NSWindowController(window: window)
         onboardingWindowController?.showWindow(nil)
@@ -400,6 +403,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 extension AppDelegate: MenuBarControllerDelegate {
     func menuBarDidRequestSettings() { showSettingsWindow() }
+
+    func menuBarDidRequestSetupWizard() { showOnboardingWindow() }
 
     func menuBarDidRequestHistory() {
         // Reveal the local history file in Finder — it's the user's data.

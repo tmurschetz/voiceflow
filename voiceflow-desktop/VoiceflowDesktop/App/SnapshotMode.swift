@@ -38,14 +38,20 @@ enum SnapshotMode {
         settings.shortcutRandom   = "⌥3"
 
         var specs: [Spec] = [
-            Spec(name: "onboarding", size: NSSize(width: 460, height: 520),
-                 view: AnyView(OnboardingView(viewModel: OnboardingViewModel()))),
             Spec(name: "settings", size: NSSize(width: 580, height: 720),
                  view: AnyView(SettingsView(viewModel: SettingsViewModel(settingsService: SettingsService())))),
             // Full-height variant so design review sees every section without scrolling.
             Spec(name: "settings-full", size: NSSize(width: 580, height: 1540),
                  view: AnyView(SettingsScrollProbe()))
         ]
+
+        // Setup wizard — one snapshot per step.
+        for step in SetupWizardViewModel.Step.allCases {
+            let wvm = SetupWizardViewModel(settingsService: SettingsService())
+            wvm.step = step
+            specs.append(Spec(name: "wizard-\(step.rawValue)-\(step)", size: NSSize(width: 520, height: 600),
+                              view: AnyView(SetupWizardView(viewModel: wvm))))
+        }
 
         let panelStates: [(String, AppState, String?)] = [
             ("panel-idle",      .idle, nil),

@@ -15,7 +15,6 @@
 		37AD9CC284EC6920152BD21E /* Uninstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */; };
 		3DC8DB85150464756A686D99 /* RescueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6E54FA4A154C550C8E6FA3B /* RescueStore.swift */; };
 		3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79A466290CA8761E783FAE /* ModeProcessor.swift */; };
-		3FA7FB275C280983C9C22AA2 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3859001B87688555C43F1897 /* OnboardingView.swift */; };
 		42894528E3434A8A4C139D12 /* SelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE2A4BFB30B525DC9348755 /* SelfTest.swift */; };
 		4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C203490056D9249E43F16113 /* SettingsView.swift */; };
 		4D4F01FC9ACA55E62478A8A9 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7563138D9880266FA772ECF /* AppInfo.swift */; };
@@ -35,6 +34,7 @@
 		D6A966006881517287550B2A /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1278BBE0DFB6124FCF67EED0 /* Config.swift */; };
 		DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986870957B3F79F64AE93655 /* SettingsService.swift */; };
 		EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */; };
+		FAA5C7B444751315BBA0874D /* SetupWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F64D0DCED6EBBDD39B8A0671 /* SetupWizardView.swift */; };
 		FC8CA7E3D7E29EEF8E17EBC4 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9694776FC320681A74AFC58C /* OpenAIClient.swift */; };
 /* End PBXBuildFile section */
 
@@ -44,7 +44,6 @@
 		1278BBE0DFB6124FCF67EED0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelViewModel.swift; sourceTree = "<group>"; };
 		2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceflowDesktopApp.swift; sourceTree = "<group>"; };
-		3859001B87688555C43F1897 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uninstaller.swift; sourceTree = "<group>"; };
 		69200CC3359B433509E3E7C5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
@@ -67,6 +66,7 @@
 		D890CA6F7B69B61E3FEB566E /* StatusPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelView.swift; sourceTree = "<group>"; };
 		E4AE4459614E88846D38FC3E /* ShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutManager.swift; sourceTree = "<group>"; };
 		E5FA3A581A678762801BEF8A /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		F64D0DCED6EBBDD39B8A0671 /* SetupWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWizardView.swift; sourceTree = "<group>"; };
 		F9A38204F9282ADCE15BC018 /* VoiceflowDesktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VoiceflowDesktop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA1019C2601FF3C184A5A05C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -218,7 +218,7 @@
 		A05B61F873EAD2B657A8409C /* Onboarding */ = {
 			isa = PBXGroup;
 			children = (
-				3859001B87688555C43F1897 /* OnboardingView.swift */,
+				F64D0DCED6EBBDD39B8A0671 /* SetupWizardView.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
@@ -354,7 +354,6 @@
 				ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */,
 				9BF714C42461818F5C317E3F /* MenuBarController.swift in Sources */,
 				3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */,
-				3FA7FB275C280983C9C22AA2 /* OnboardingView.swift in Sources */,
 				FC8CA7E3D7E29EEF8E17EBC4 /* OpenAIClient.swift in Sources */,
 				9FFDDCED614C4AB971B5FDAB /* OutputService.swift in Sources */,
 				5ECE84548F90AFA7E7C65828 /* PermissionsManager.swift in Sources */,
@@ -364,6 +363,7 @@
 				DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */,
 				4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */,
 				80681A89C12E9E70ADD966D2 /* SettingsViewModel.swift in Sources */,
+				FAA5C7B444751315BBA0874D /* SetupWizardView.swift in Sources */,
 				08F8F8268F17A6BB579C29A4 /* ShortcutManager.swift in Sources */,
 				AEB7AF041A80190ACA9F329A /* SnapshotMode.swift in Sources */,
 				25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */,

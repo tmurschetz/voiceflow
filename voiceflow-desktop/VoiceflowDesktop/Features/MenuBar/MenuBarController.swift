@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 protocol MenuBarControllerDelegate: AnyObject {
     func menuBarDidRequestSettings()
+    func menuBarDidRequestSetupWizard()
     func menuBarDidRequestHistory()
     func menuBarDidRequestCheckForUpdates()
     func menuBarDidRequestQuit()
@@ -237,6 +238,14 @@ final class MenuBarController {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let setupItem = NSMenuItem(
+            title: "Setup-Assistent…",
+            action: #selector(handleSetupWizard),
+            keyEquivalent: ""
+        )
+        setupItem.target = self
+        menu.addItem(setupItem)
+
         let historyItem = NSMenuItem(
             title: "Verlauf öffnen",
             action: #selector(handleHistory),
@@ -274,6 +283,7 @@ final class MenuBarController {
 
     @objc private func handleCheckForUpdates() { delegate?.menuBarDidRequestCheckForUpdates() }
     @objc private func handleSettings()        { delegate?.menuBarDidRequestSettings() }
+    @objc private func handleSetupWizard()     { delegate?.menuBarDidRequestSetupWizard() }
     @objc private func handleHistory()         { delegate?.menuBarDidRequestHistory() }
     @objc private func handleQuit()            { delegate?.menuBarDidRequestQuit() }
 
