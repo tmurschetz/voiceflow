@@ -171,6 +171,17 @@ enum SelfTest {
             check("Hochdeutsch (kein Dialekt, keine Emojis)", dialectScore(out) <= 1)
         }
 
+        // 11. Empty-recording guard — must be detected locally, before any upload.
+        print("\n[11] Leere/zu kurze Aufnahme wird lokal erkannt (kein Upload, keine Rettung)")
+        check("Leere Daten (500 B) → als leer erkannt",
+              TranscriptionService.isEmptyRecording(data: Data(count: 500),
+                                                    url: URL(fileURLWithPath: "/dev/null")))
+        if let audioPath, let realData = try? Data(contentsOf: URL(fileURLWithPath: audioPath)) {
+            check("Echte Aufnahme → NICHT als leer erkannt",
+                  !TranscriptionService.isEmptyRecording(data: realData,
+                                                        url: URL(fileURLWithPath: audioPath)))
+        }
+
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")
         return failed == 0

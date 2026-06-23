@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 
 // MARK: - TranscriptionResult
 
@@ -54,6 +55,16 @@ final class TranscriptionService {
         let audioData = try Data(contentsOf: audio.fileURL)
         let fileExt = audio.fileURL.pathExtension.lowercased()
 
+        // Guard against an empty/too-short recording — typically an accidental
+        // double-press of the shortcut (start+stop with nothing in between).
+        // Uploading it returns an opaque OpenAI 400 ("Audio file might be
+        // corrupted or unsupported") and gets stuck in the retry/rescue loop.
+        // Catch it up front and surface a friendly, non-retryable error.
+        if Self.isEmptyRecording(data: audioData, url: audio.fileURL) {
+            NSLog("[VF-Transcribe] Empty/too-short recording (%d bytes) — not uploading", audioData.count)
+            throw TranscriptionError.noSpeech
+        }
+
         let languageCode: String?
         let usedLocale: String
         switch language {
@@ -100,17 +111,34 @@ final class TranscriptionService {
         }
         throw lastError
     }
+
+    /// True when the recording contains essentially no audio. An empty AAC/m4a
+    /// container is ~557 bytes; the shortest real utterance is several KB. The
+    /// byte floor catches the common case fast; the decoded-duration check is a
+    /// format-agnostic backstop (also covers the .caf path for a chosen device).
+    static func isEmptyRecording(data: Data, url: URL) -> Bool {
+        if data.count < 1200 { return true }
+        if let file = try? AVAudioFile(forReading: url), file.fileFormat.sampleRate > 0 {
+            let seconds = Double(file.length) / file.fileFormat.sampleRate
+            if seconds < 0.35 { return true }
+        }
+        return false
+    }
 }
 
 // MARK: - Errors
 
-enum TranscriptionError: LocalizedError {
+enum TranscriptionError: LocalizedError, Equatable {
     case emptyTranscript
+    /// The recording had no audio (e.g. accidental double-press). Not retryable.
+    case noSpeech
 
     var errorDescription: String? {
         switch self {
         case .emptyTranscript:
             return "Keine Sprache erkannt. Bitte erneut versuchen."
+        case .noSpeech:
+            return "Keine Sprache aufgenommen. Shortcut drücken, sprechen, dann nochmals drücken."
         }
     }
 }
