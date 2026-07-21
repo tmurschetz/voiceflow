@@ -20,7 +20,7 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
-## [1.1.0] — 2026-06-24
+## [1.1.0] — 2026-07-21
 
 ### Better transcription quality
 - The default transcription model is now **`gpt-4o-transcribe`** (was the cheaper
