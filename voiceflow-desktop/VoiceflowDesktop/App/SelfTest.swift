@@ -67,7 +67,7 @@ enum SelfTest {
         let textModel = TextModel.recommended.id
 
         // 1. Transcription (v1.0.1 baseline) — only if an audio file was given
-        print("\n[1] Transkription (gpt-4o-mini-transcribe)")
+        print("\n[1] Transkription (\(transcribeModel))")
         if let audioPath, FileManager.default.fileExists(atPath: audioPath) {
             let audio = RecordedAudio(fileURL: URL(fileURLWithPath: audioPath))
             do {
@@ -100,6 +100,17 @@ enum SelfTest {
             check("Nicht leer & umgeschrieben", out.count > 10)
             check("Kein 'ß' (Schweizer Schreibweise)", !out.contains("ß"))
             check("Hochdeutsch (kein Dialekt)", dialectScore(out) <= 1, detail: "score \(dialectScore(out))")
+        }
+
+        // 3b. Business must NEVER formalise the form of address (v1.1 fix:
+        // a dictated "du" used to come back as "Sie").
+        if let out = await process(processor, "kannst du mir bitte die unterlagen bis morgen mittag schicken danke dir",
+                                   mode: .business, instruction: "", textModel: textModel) {
+            let low = " " + out.lowercased() + " "
+            let keptDu = low.contains(" du ") || low.contains(" dir") || low.contains(" dich")
+            let forcedSie = low.contains("ihnen") || low.contains("können sie") || low.contains("könnten sie")
+            check("Business behält 'du' (keine Sie-Form erzwungen)", keptDu && !forcedSie,
+                  detail: "Output: \(out)")
         }
 
         // 4. Guardrail — a QUESTION must be cleaned up, not answered (v1.0.4 fix)
@@ -181,6 +192,81 @@ enum SelfTest {
                   !TranscriptionService.isEmptyRecording(data: realData,
                                                         url: URL(fileURLWithPath: audioPath)))
         }
+
+        // 12. v1.1 quality: default model + recognition-prompt / vocabulary logic.
+        print("\n[12] Standardmodell & Erkennungs-Prompt (v1.1)")
+        check("Standard-Transkriptionsmodell = gpt-4o-transcribe",
+              TranscribeModel.recommended.id == "gpt-4o-transcribe",
+              detail: "ist \(TranscribeModel.recommended.id)")
+
+        let pDE = TranscriptionService.recognitionPrompt(for: .manual(.german), vocabulary: "")
+        check("Deutsch-Prompt enthält Formatierungshinweis", pDE.contains("Interpunktion"))
+
+        let pAuto = TranscriptionService.recognitionPrompt(for: .autoDetect, vocabulary: "")
+        check("Auto-Erkennung ohne Vokabular → kein Prompt (kein Sprach-Bias)",
+              pAuto.isEmpty, detail: "war \"\(pAuto)\"")
+
+        let pVocab = TranscriptionService.recognitionPrompt(for: .manual(.german),
+                                                            vocabulary: "Murschetz\nVoiceflow")
+        check("Vokabular eingebettet & Zeilen→Kommas",
+              pVocab.contains("Murschetz, Voiceflow"), detail: pVocab)
+
+        let pAutoVocab = TranscriptionService.recognitionPrompt(for: .autoDetect, vocabulary: "Zürich")
+        check("Auto-Erkennung mit Vokabular → nur Begriffe", pAutoVocab == "Zürich",
+              detail: "war \"\(pAutoVocab)\"")
+
+        let pCap = TranscriptionService.recognitionPrompt(for: .manual(.german),
+                                                          vocabulary: String(repeating: "x", count: 1000))
+        check("Vokabular auf ~480 Zeichen gekappt",
+              pCap.filter { $0 == "x" }.count <= 480,
+              detail: "\(pCap.filter { $0 == "x" }.count) x-Zeichen")
+
+        // 13. Auto-update version comparison (v1.1, GitHub-releases updater).
+        print("\n[13] Auto-Update — Versionsvergleich")
+        check("1.1.0 > 1.0.6", UpdateService.compareVersions("1.1.0", "1.0.6") == 1)
+        check("v-Präfix toleriert (v1.2.0 > 1.1.0)", UpdateService.compareVersions("v1.2.0", "1.1.0") == 1)
+        check("Gleiche Version → 0", UpdateService.compareVersions("1.1.0", "1.1.0") == 0)
+        check("Ältere erkannt (1.0.6 < 1.1.0)", UpdateService.compareVersions("1.0.6", "1.1.0") == -1)
+
+        // 14. Managed accounts — pure logic (network paths are covered by the
+        // separate --accounttest E2E against a local service).
+        print("\n[14] Verwalteter Zugang — Logik")
+        let t1 = AccountService.generateDeviceToken()
+        let t2 = AccountService.generateDeviceToken()
+        check("Gerätetoken = 64 Hex-Zeichen",
+              t1.count == 64 && t1.allSatisfy { "0123456789abcdef".contains($0) })
+        check("Gerätetokens einzigartig", t1 != t2)
+
+        let fixture = #"{"status":"approved","apiKey":"sk-test-abc"}"#.data(using: .utf8)!
+        let decoded = try? JSONDecoder().decode(AccountService.StatusResponse.self, from: fixture)
+        check("Status-Antwort dekodierbar", decoded?.apiKey == "sk-test-abc")
+
+        let machine = await MainActor.run { () -> [Bool] in
+            var memToken: String? = "x"
+            var memKey: String?
+            let store = AccountService.Store(
+                getDeviceToken: { memToken }, setDeviceToken: { memToken = $0 },
+                installAPIKey: { memKey = $0 }, removeAPIKey: { memKey = nil },
+                hasAPIKey: { memKey != nil })
+            let d = UserDefaults.standard
+            let m0 = d.bool(forKey: AccountService.managedFlagKey)
+            let p0 = d.bool(forKey: AccountService.pendingFlagKey)
+            defer {
+                d.set(m0, forKey: AccountService.managedFlagKey)
+                d.set(p0, forKey: AccountService.pendingFlagKey)
+            }
+            let s = AccountService(store: store, baseURL: { "http://invalid.local" })
+            s.apply(.init(status: "pending", apiKey: nil))
+            let r1 = s.phase == .pending
+            s.apply(.init(status: "approved", apiKey: "sk-test-xyz"))
+            let r2 = s.phase == .active && memKey == "sk-test-xyz"
+            s.apply(.init(status: "revoked", apiKey: nil))
+            let r3 = s.phase == .revoked && memKey == nil
+            return [r1, r2, r3]
+        }
+        check("pending → wartend", machine[0])
+        check("approved + Key → aktiv, Key installiert", machine[1])
+        check("revoked → Key lokal entfernt (Kill-Switch)", machine[2])
 
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")

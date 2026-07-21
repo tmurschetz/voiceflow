@@ -31,10 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController:          MenuBarController?
     private var onboardingWindowController: NSWindowController?
     private var settingsWindowController:   NSWindowController?
+    private var historyWindowController:    NSWindowController?
 
     // MARK: - Recording timer
 
     private var recordingTimer: Timer?
+
+    // MARK: - Auto-update timer
+
+    private var updateTimer: Timer?
 
     // MARK: - Lifecycle
 
@@ -51,8 +56,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Headless E2E of the managed-account flow against a local accounts
+        // service (--accounttest <url> <adminToken>) — in-memory store only.
+        if AccountTest.runIfRequested() {
+            return
+        }
+
         menuBarController = MenuBarController(delegate: self)
         resetAXPromptIfNewBuild()
+
+        // One-time: upgrade users still on the old, less accurate default model.
+        settingsService.migrateTranscribeModelIfNeeded()
 
         // Load local settings + bind shortcuts immediately — no network needed.
         let settings = settingsService.loadSettings()
@@ -72,6 +86,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController?.refreshRescueState()
 
         Task { await permissionsManager.requestRequiredPermissions() }
+
+        // Managed accounts: while an access request awaits approval, poll the
+        // accounts service; once approved the key installs itself and the menu
+        // bar flips to ready.
+        AccountService.shared.onPhaseChange = { [weak self] phase in
+            guard let self else { return }
+            let current = self.settingsService.currentSettings
+            switch phase {
+            case .active:
+                self.menuBarController?.update(state: .idle, settings: current)
+                self.showAccountActivatedAlert()
+            case .revoked, .denied:
+                if !KeychainStore.hasAPIKey {
+                    self.menuBarController?.update(state: .needsAPIKey, settings: current)
+                }
+            default:
+                break
+            }
+        }
+        if AccountService.shared.isPending {
+            AccountService.shared.startPolling()
+        }
+
+        // Auto-update: check shortly after launch, then periodically (internally
+        // throttled to ~once a day). Updates come from the app's public GitHub
+        // releases — see UpdateService.
+        UpdateService.shared.checkInBackground()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { _ in
+            MainActor.assumeIsolated { UpdateService.shared.checkInBackground() }
+        }
     }
 
     /// Resets the "Accessibility already prompted" flag whenever a new binary is
@@ -132,6 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     audio: audio,
                     language: settings?.language ?? .autoDetect,
                     model: settings?.transcribeModel ?? TranscribeModel.recommended.id,
+                    vocabulary: settings?.customVocabulary ?? "",
                     onRetry: { [weak self] event in
                         self?.showRetryEvent(event)
                     }
@@ -263,6 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 audio: audio,
                 language: settings?.language ?? .autoDetect,
                 model: settings?.transcribeModel ?? TranscribeModel.recommended.id,
+                vocabulary: settings?.customVocabulary ?? "",
                 onRetry: { [weak self] event in self?.showRetryEvent(event) }
             )
             let processingResult = try await modeProcessor.process(
@@ -313,22 +359,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Windows
 
+    /// Shows the first-run setup wizard (API key → models → shortcuts →
+    /// permissions). Also reopenable from the menu for users who want to revisit it.
     private func showOnboardingWindow() {
         if let existing = onboardingWindowController {
             existing.window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let vm = OnboardingViewModel()
+        let vm = SetupWizardViewModel(settingsService: settingsService)
         vm.onComplete = { [weak self] in
             guard let self else { return }
             self.onboardingWindowController?.close()
             self.onboardingWindowController = nil
-            self.menuBarController?.update(state: .idle, settings: self.settingsService.currentSettings)
-            // Refresh the key status shown in an already-open Settings window next time.
+            let settings = self.settingsService.currentSettings
+            let state: AppState = KeychainStore.hasAPIKey ? .idle : .needsAPIKey
+            self.menuBarController?.update(state: state, settings: settings)
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -337,7 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.center()
-        window.contentView = NSHostingView(rootView: OnboardingView(viewModel: vm))
+        window.contentView = NSHostingView(rootView: SetupWizardView(viewModel: vm))
         window.isReleasedWhenClosed = false
         onboardingWindowController = NSWindowController(window: window)
         onboardingWindowController?.showWindow(nil)
@@ -360,6 +409,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindowController = NSWindowController(window: window)
         }
         settingsWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// One-time celebration when a managed access request gets approved.
+    private func showAccountActivatedAlert() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Voiceflow ist freigeschaltet 🎉"
+        alert.informativeText = "Dein Zugang wurde eingerichtet. Drück deinen Shortcut, sprich los — fertig."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Los geht's")
+        alert.runModal()
+    }
+
+    func showHistoryWindow() {
+        // Recreate on every open so the list is always fresh (entries are loaded
+        // in HistoryView.onAppear; a cached window would show a stale list).
+        let enabled = settingsService.currentSettings?.historyEnabled ?? true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Voiceflow — Verlauf"
+        window.center()
+        window.contentView = NSHostingView(rootView: HistoryView(historyEnabled: enabled))
+        window.isReleasedWhenClosed = false
+        historyWindowController = NSWindowController(window: window)
+        historyWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -401,20 +480,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 extension AppDelegate: MenuBarControllerDelegate {
     func menuBarDidRequestSettings() { showSettingsWindow() }
 
+    func menuBarDidRequestSetupWizard() { showOnboardingWindow() }
+
     func menuBarDidRequestHistory() {
-        // Reveal the local history file in Finder — it's the user's data.
-        NSWorkspace.shared.activateFileViewerSelecting([HistoryStore.shared.fileURL])
+        // In-app history window (v1.1) — "Im Finder zeigen" lives in its footer.
+        showHistoryWindow()
     }
 
     func menuBarDidRequestCheckForUpdates() {
-        // Sparkle not active in ad-hoc beta build — updates are distributed via DMG.
-        // Phase 2 (Developer ID + notarization) will re-enable this.
-        let alert = NSAlert()
-        alert.messageText = "Updates folgen bald"
-        alert.informativeText = "Auto-Updates sind in dieser Beta noch nicht aktiv. Du bekommst neue Versionen als DMG."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        UpdateService.shared.checkManually()
     }
 
     func menuBarDidRequestQuit() { NSApp.terminate(nil) }

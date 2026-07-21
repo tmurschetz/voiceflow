@@ -27,6 +27,13 @@ struct AppSettings: Codable, Equatable {
     /// Text model ID for tone-of-voice rewriting (see TextModel).
     var textModel: String = TextModel.recommended.id
 
+    // MARK: - Recognition vocabulary
+    // User-supplied names / brands / project & domain terms. Appended to the
+    // transcription prompt so the model spells them correctly instead of guessing
+    // phonetically (the "learns your words" idea, but explicit and user-controlled).
+
+    var customVocabulary: String = ""
+
     // MARK: - Language
 
     var autoDetectLanguage: Bool = true
@@ -93,6 +100,7 @@ struct AppSettings: Codable, Equatable {
         instructionRandom   = try c.decodeIfPresent(String.self, forKey: .instructionRandom)   ?? ""
         transcribeModel = try c.decodeIfPresent(String.self, forKey: .transcribeModel) ?? TranscribeModel.recommended.id
         textModel       = try c.decodeIfPresent(String.self, forKey: .textModel)       ?? TextModel.recommended.id
+        customVocabulary = try c.decodeIfPresent(String.self, forKey: .customVocabulary) ?? ""
         autoDetectLanguage = try c.decodeIfPresent(Bool.self, forKey: .autoDetectLanguage) ?? true
         manualLanguageOverride = try c.decodeIfPresent(SupportedLanguage.self, forKey: .manualLanguageOverride) ?? .german
         outputMode = try c.decodeIfPresent(OutputMode.self, forKey: .outputMode) ?? .insertIntoField
@@ -117,23 +125,23 @@ struct TranscribeModel: Identifiable, Equatable {
 
     static let all: [TranscribeModel] = [
         TranscribeModel(
-            id: "gpt-4o-mini-transcribe",
-            name: "GPT-4o mini Transcribe — empfohlen",
-            guidance: "Am schnellsten und am günstigsten (≈ 0.3 Rp./Min). Sehr gute Qualität für Deutsch, Schweizerdeutsch und Englisch — die richtige Wahl für den Alltag."
+            id: "gpt-4o-transcribe",
+            name: "GPT-4o Transcribe — empfohlen",
+            guidance: "Beste Genauigkeit (≈ 22 % weniger Fehler als die anderen, ≈ 0.6 Rp./Min). Erkennt Namen, Fachbegriffe und Komposita zuverlässiger — die richtige Wahl für saubere Ergebnisse."
         ),
         TranscribeModel(
-            id: "gpt-4o-transcribe",
-            name: "GPT-4o Transcribe — höchste Genauigkeit",
-            guidance: "≈ 22 % weniger Erkennungsfehler als Whisper, doppelter Preis (≈ 0.6 Rp./Min). Lohnt sich bei schwieriger Audioqualität, starkem Dialekt oder vielen Fachbegriffen."
+            id: "gpt-4o-mini-transcribe",
+            name: "GPT-4o mini Transcribe — am günstigsten",
+            guidance: "Am schnellsten und halb so teuer (≈ 0.3 Rp./Min), aber etwas fehleranfälliger bei selteneren Wörtern. Für einfache, klare Diktate ok."
         ),
         TranscribeModel(
             id: "whisper-1",
             name: "Whisper — breiteste Sprachabdeckung",
-            guidance: "Der bewährte Klassiker mit 98 unterstützten Sprachen (≈ 0.6 Rp./Min) — die beste Wahl für seltenere Sprachen. Etwas langsamer als die GPT-4o-Modelle."
+            guidance: "Der bewährte Klassiker mit 98 unterstützten Sprachen (≈ 0.6 Rp./Min) — die beste Wahl für seltenere Sprachen."
         )
     ]
 
-    static let recommended = all[0]
+    static let recommended = all[0]   // gpt-4o-transcribe
 
     static func byID(_ id: String) -> TranscribeModel {
         all.first { $0.id == id } ?? recommended

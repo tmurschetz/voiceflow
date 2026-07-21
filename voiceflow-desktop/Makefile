@@ -10,10 +10,19 @@ BUILD    = .build
 APP      = $(BUILD)/Release/$(APP_NAME).app
 DMG      = $(APP_NAME)-$(VERSION).dmg
 
-VERSION  = 1.0.6
+VERSION  = 1.1.0
+
+# ─── Code signing ─────────────────────────────────────────────────────────────
+# SIGN_IDENTITY defaults to "-" (ad-hoc, no Apple account). The `release` target
+# overrides it with the Developer ID for a notarised public build.
+SIGN_IDENTITY ?= -
+TEAM_ID        = GD42PF6FBY
+DEV_ID         = Developer ID Application: Thomas Murschetz ($(TEAM_ID))
+NOTARY_PROFILE = voiceflow-notary
+RELEASE_ENT    = VoiceflowDesktop/Resources/VoiceflowDesktop-release.entitlements
 
 .PHONY: generate open dev build clean \
-        build-release dmg install \
+        build-release dmg dmg-package install release notarize-check \
         deps help icon release-notes
 
 # ─── Developer workflow ───────────────────────────────────────────────────────
@@ -31,6 +40,10 @@ dev: generate open
 
 ## Build Debug from the command line (for CI / quick check)
 build: generate
+	@# Google Drive / Finder add extended attributes to files under .build/ —
+	@# codesign then fails with "resource fork … detritus not allowed". Strip
+	@# them up front (same guard as build-release).
+	@xattr -cr "$(BUILD)/DerivedData" 2>/dev/null || true
 	xcodebuild \
 		-project $(PROJECT) \
 		-scheme  $(SCHEME)  \
@@ -141,34 +154,35 @@ build-release: generate
 	    fi; \
 	  done
 	@echo "   ✓ MenuBarIcon variants copied"
-	@# ── Step 5: re-sign inside-out with ad-hoc + entitlements ────────────────
-	@# macOS 14+ Hardened Runtime enforces library-validation: all loaded
-	@# frameworks must share the main executable's Team ID.  Sparkle ships
-	@# with its own Developer ID, so dyld refuses to load it ad-hoc unless
-	@# com.apple.security.cs.disable-library-validation is present.
-	@# We sign from the inside out: helper tools → Sparkle → app bundle.
-	@echo "   Re-signing app bundle with adhoc entitlements (inside-out)…"
-	@ADHOC_ENT="$(CURDIR)/VoiceflowDesktop/Resources/VoiceflowDesktop-adhoc.entitlements"; \
-	  APP="$(CURDIR)/$(APP)"; \
-	  find "$$APP/Contents/Frameworks" -name "*.framework" -maxdepth 1 | while read fw; do \
-	    codesign --force --sign - "$$fw" 2>/dev/null; \
+	@# ── Step 5: re-sign inside-out (frameworks → app) ────────────────────────
+	@# Ad-hoc (SIGN_IDENTITY=-): uses the adhoc entitlements with
+	@# disable-library-validation (frameworks re-signed ad-hoc carry no Team ID).
+	@# Developer ID (release): Hardened Runtime + secure timestamp + the minimal
+	@# release entitlements — library validation passes because every framework
+	@# is signed with the same identity.
+	@echo "   Code-signing as: $(SIGN_IDENTITY)…"
+	@APP="$(CURDIR)/$(APP)"; \
+	  if [ "$(SIGN_IDENTITY)" = "-" ]; then \
+	    ENT="$(CURDIR)/VoiceflowDesktop/Resources/VoiceflowDesktop-adhoc.entitlements"; OPTS=""; \
+	  else \
+	    ENT="$(CURDIR)/$(RELEASE_ENT)"; OPTS="--options runtime --timestamp"; \
+	  fi; \
+	  find "$$APP/Contents" \( -name "*.framework" -o -name "*.dylib" -o -name "*.bundle" \) 2>/dev/null | while read item; do \
+	    codesign --force $$OPTS --sign "$(SIGN_IDENTITY)" "$$item" 2>/dev/null; \
 	  done; \
-	  find "$$APP/Contents/Frameworks/Sparkle.framework" -name "*.xpc" -o -name "Autoupdate" -o -name "Updater" 2>/dev/null | while read tool; do \
-	    codesign --force --sign - "$$tool" 2>/dev/null; \
-	  done; \
-	  codesign --force --sign - --entitlements "$$ADHOC_ENT" "$$APP"
+	  codesign --force $$OPTS --sign "$(SIGN_IDENTITY)" --entitlements "$$ENT" "$$APP"
 	@echo "   ✓ signed"
 	@test -f "$(APP)/Contents/MacOS/$(APP_NAME)" && echo "✅  Built: $(APP)" \
 	  || (echo "❌  Build failed — run 'make build-release' without grep to see full output" && exit 1)
 
-## Package the Release .app as a drag-install DMG
-##   Output: Voiceflow-beta.dmg (uses only macOS built-in hdiutil — no Homebrew needed)
-dmg: build-release
+## Package the (already-built) Release .app into a drag-install DMG.
+## Does NOT rebuild — `release` calls this after signing+notarising the app.
+dmg-package:
 	@echo "→  Packaging $(DMG) (v$(VERSION))…"
 	@rm -rf "$(BUILD)/dmg-staging" "$(DMG)"
 	@mkdir -p "$(BUILD)/dmg-staging"
 	@cp -R "$(APP)" "$(BUILD)/dmg-staging/"
-	@cp INSTALL.md "$(BUILD)/dmg-staging/"
+	@cp INSTALL.md "$(BUILD)/dmg-staging/" 2>/dev/null || true
 	@ln -s /Applications "$(BUILD)/dmg-staging/Applications"
 	hdiutil create \
 		-volname "$(APP_NAME)" \
@@ -176,10 +190,53 @@ dmg: build-release
 		-ov -format UDZO \
 		-o "$(DMG)"
 	@rm -rf "$(BUILD)/dmg-staging"
-	@echo ""
 	@echo "✅  $(DMG) is ready  (v$(VERSION))"
+
+## Build (ad-hoc) + package — the internal-beta DMG (no Apple account needed).
+dmg: build-release
+	@$(MAKE) dmg-package
 	@echo "   ┌─ To install: open the DMG, drag Voiceflow → Applications"
 	@echo "   └─ First launch: right-click → Open  (or: xattr -cr /Applications/Voiceflow.app)"
+
+# ─── Public release (Developer ID + notarisation) ─────────────────────────────
+#
+# One-time setup (creates the notary credential in YOUR keychain — needs an
+# app-specific password from appleid.apple.com → Sign-In and Security):
+#
+#   xcrun notarytool store-credentials voiceflow-notary \
+#       --apple-id you@example.com --team-id GD42PF6FBY
+#
+# Then every release is simply:  make release
+#   → builds Developer-ID-signed (Hardened Runtime) → notarises → staples →
+#     packages a clean DMG that opens with no Gatekeeper warning, anywhere.
+
+## Verify the Developer ID cert + notary credential are in place.
+notarize-check:
+	@security find-identity -v -p codesigning | grep -q "$(DEV_ID)" \
+	  || { echo "❌  Developer ID cert nicht gefunden ($(DEV_ID))."; exit 1; }
+	@xcrun notarytool history --keychain-profile "$(NOTARY_PROFILE)" >/dev/null 2>&1 \
+	  || { echo "❌  Notar-Zugang '$(NOTARY_PROFILE)' fehlt. Einmalig einrichten:"; \
+	       echo "    xcrun notarytool store-credentials $(NOTARY_PROFILE) --apple-id <APPLE-ID> --team-id $(TEAM_ID)"; \
+	       exit 1; }
+	@echo "✅  Developer ID cert + Notar-Zugang vorhanden."
+
+## Full public release: signed → notarised → stapled DMG.
+release: notarize-check
+	@echo "═══ Voiceflow $(VERSION) — signiertes & notarisiertes Release ═══"
+	$(MAKE) build-release SIGN_IDENTITY="$(DEV_ID)"
+	@echo "→  Verifiziere Signatur…"
+	@codesign --verify --deep --strict --verbose=1 "$(APP)" && echo "   ✓ codesign ok"
+	@echo "→  Notarisiere (kann 1–5 Min dauern)…"
+	@ditto -c -k --keepParent "$(APP)" "$(BUILD)/notarize.zip"
+	xcrun notarytool submit "$(BUILD)/notarize.zip" --keychain-profile "$(NOTARY_PROFILE)" --wait
+	@rm -f "$(BUILD)/notarize.zip"
+	@echo "→  Staple das Ticket an die App…"
+	xcrun stapler staple "$(APP)"
+	@$(MAKE) dmg-package
+	@xcrun stapler staple "$(DMG)" || true
+	@echo ""
+	@echo "✅  Notarisiertes Release fertig: $(DMG)"
+	@echo "    spctl-Check:" && spctl --assess --type open --context context:primary-signature -v "$(DMG)" 2>&1 | sed 's/^/    /' || true
 
 ## Build Release + install directly to /Applications on this Mac
 install: build-release

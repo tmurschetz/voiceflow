@@ -9,39 +9,53 @@ enum KeychainStore {
 
     private static let service = "com.voiceflow.desktop"
     private static let account = "openai_api_key"
+    private static let deviceTokenAccount = "account_device_token"
 
     /// The user's OpenAI API key, or nil if not yet configured.
     static var apiKey: String? {
-        get {
-            let query: [String: Any] = [
-                kSecClass as String:        kSecClassGenericPassword,
-                kSecAttrService as String:  service,
-                kSecAttrAccount as String:  account,
-                kSecReturnData as String:   true,
-                kSecMatchLimit as String:   kSecMatchLimitOne
-            ]
-            var result: AnyObject?
-            guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-                  let data = result as? Data,
-                  let key = String(data: data, encoding: .utf8),
-                  !key.isEmpty
-            else { return nil }
-            return key
-        }
-        set {
-            let base: [String: Any] = [
-                kSecClass as String:       kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: account
-            ]
-            SecItemDelete(base as CFDictionary)
-            guard let newValue, !newValue.isEmpty,
-                  let data = newValue.data(using: .utf8) else { return }
-            var add = base
-            add[kSecValueData as String] = data
-            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            SecItemAdd(add as CFDictionary, nil)
-        }
+        get { read(account: account) }
+        set { write(account: account, value: newValue) }
+    }
+
+    /// Random 256-bit token identifying this Mac towards the accounts service
+    /// (managed access — see AccountService). Not an API key.
+    static var accountDeviceToken: String? {
+        get { read(account: deviceTokenAccount) }
+        set { write(account: deviceTokenAccount, value: newValue) }
+    }
+
+    // MARK: - Generic password plumbing
+
+    private static func read(account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String:        kSecClassGenericPassword,
+            kSecAttrService as String:  service,
+            kSecAttrAccount as String:  account,
+            kSecReturnData as String:   true,
+            kSecMatchLimit as String:   kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data,
+              let value = String(data: data, encoding: .utf8),
+              !value.isEmpty
+        else { return nil }
+        return value
+    }
+
+    private static func write(account: String, value: String?) {
+        let base: [String: Any] = [
+            kSecClass as String:       kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(base as CFDictionary)
+        guard let value, !value.isEmpty,
+              let data = value.data(using: .utf8) else { return }
+        var add = base
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(add as CFDictionary, nil)
     }
 
     /// True once the user has stored a key.

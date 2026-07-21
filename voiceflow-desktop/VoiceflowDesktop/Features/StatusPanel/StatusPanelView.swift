@@ -9,6 +9,7 @@ struct StatusPanelView: View {
     var onSettings: () -> Void
     var onQuit: () -> Void
     var onRetryRescue: () -> Void = {}
+    var onHistory: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,18 +19,37 @@ struct StatusPanelView: View {
                 .padding(.bottom, 14)
                 .frame(maxWidth: .infinity)
 
-            // API key missing → prominent CTA
+            // API key missing → prominent CTA (or waiting hint while a managed
+            // access request is pending approval)
             if case .needsAPIKey = viewModel.state {
-                Button(action: onSettings) {
-                    Label("OpenAI API-Key eintragen", systemImage: "key.fill")
-                        .font(.callout.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                if AccountService.shared.isPending {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Wartet auf Freigabe")
+                                .font(.callout.weight(.medium))
+                            Text("Sobald Thomas dich freigibt, richtet sich Voiceflow selbst ein.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.blue.opacity(0.09)))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                } else {
+                    Button(action: onSettings) {
+                        Label("Einrichten (Zugang oder API-Key)", systemImage: "key.fill")
+                            .font(.callout.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 14)
             }
 
             Divider().padding(.horizontal, 12)
@@ -71,32 +91,42 @@ struct StatusPanelView: View {
                 Divider().padding(.horizontal, 12)
             }
 
-            // Footer
-            HStack {
-                Button(action: onSettings) {
-                    Label("Einstellungen", systemImage: "gearshape")
-                        .font(.callout)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+            // Footer: three quiet actions, version tucked underneath.
+            VStack(spacing: 6) {
+                HStack {
+                    Button(action: onHistory) {
+                        Label("Verlauf", systemImage: "clock.arrow.circlepath")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
 
-                Spacer()
+                    Spacer()
+
+                    Button(action: onSettings) {
+                        Label("Einstellungen", systemImage: "gearshape")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button(action: onQuit) {
+                        Label("Beenden", systemImage: "power")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
 
                 Text(AppInfo.displayString)
                     .font(.caption2)
                     .foregroundStyle(.quaternary)
-
-                Spacer()
-
-                Button(action: onQuit) {
-                    Label("Beenden", systemImage: "power")
-                        .font(.callout)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
         }
         .frame(width: 300)
         .background(.regularMaterial)

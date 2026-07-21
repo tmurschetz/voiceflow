@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 protocol MenuBarControllerDelegate: AnyObject {
     func menuBarDidRequestSettings()
+    func menuBarDidRequestSetupWizard()
     func menuBarDidRequestHistory()
     func menuBarDidRequestCheckForUpdates()
     func menuBarDidRequestQuit()
@@ -78,11 +79,16 @@ final class MenuBarController {
             onRetryRescue: { [weak self] in
                 self?.closePopover()
                 self?.delegate?.menuBarDidRequestRescueRetry()
+            },
+            onHistory: { [weak self] in
+                self?.closePopover()
+                self?.delegate?.menuBarDidRequestHistory()
             }
         )
 
         let pop = NSPopover()
-        pop.contentSize = NSSize(width: 280, height: 340)
+        // Width must match StatusPanelView's fixed frame (300).
+        pop.contentSize = NSSize(width: 300, height: 340)
         pop.behavior = .transient
         pop.contentViewController = NSHostingController(rootView: panel)
         self.popover = pop
@@ -237,6 +243,14 @@ final class MenuBarController {
         settingsItem.target = self
         menu.addItem(settingsItem)
 
+        let setupItem = NSMenuItem(
+            title: "Setup-Assistent…",
+            action: #selector(handleSetupWizard),
+            keyEquivalent: ""
+        )
+        setupItem.target = self
+        menu.addItem(setupItem)
+
         let historyItem = NSMenuItem(
             title: "Verlauf öffnen",
             action: #selector(handleHistory),
@@ -274,6 +288,7 @@ final class MenuBarController {
 
     @objc private func handleCheckForUpdates() { delegate?.menuBarDidRequestCheckForUpdates() }
     @objc private func handleSettings()        { delegate?.menuBarDidRequestSettings() }
+    @objc private func handleSetupWizard()     { delegate?.menuBarDidRequestSetupWizard() }
     @objc private func handleHistory()         { delegate?.menuBarDidRequestHistory() }
     @objc private func handleQuit()            { delegate?.menuBarDidRequestQuit() }
 

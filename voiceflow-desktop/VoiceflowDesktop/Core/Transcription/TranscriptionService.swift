@@ -46,6 +46,7 @@ final class TranscriptionService {
         audio: RecordedAudio,
         language: LanguageSelection,
         model: String,
+        vocabulary: String = "",
         onRetry: (@MainActor @Sendable (PipelineRetryEvent) async -> Void)? = nil
     ) async throws -> TranscriptionResult {
         guard let apiKey = KeychainStore.apiKey else {
@@ -76,6 +77,8 @@ final class TranscriptionService {
             usedLocale = lang.rawValue
         }
 
+        let prompt = Self.recognitionPrompt(for: language, vocabulary: vocabulary)
+
         var lastError: Error = OpenAIError.invalidResponse
         for attempt in 1...Self.maxAttempts {
             do {
@@ -84,7 +87,8 @@ final class TranscriptionService {
                     fileExt: fileExt,
                     languageCode: languageCode,
                     model: model,
-                    apiKey: apiKey
+                    apiKey: apiKey,
+                    prompt: prompt
                 )
                 guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     throw TranscriptionError.emptyTranscript
@@ -123,6 +127,46 @@ final class TranscriptionService {
             if seconds < 0.35 { return true }
         }
         return false
+    }
+
+    /// Builds the OpenAI transcription `prompt` — a short bias string that nudges
+    /// the model toward clean spelling/punctuation and feeds the user's custom
+    /// vocabulary (names, brands, project terms) so they're written correctly
+    /// instead of guessed phonetically.
+    ///
+    /// On auto-detect we deliberately omit a language-specific carrier sentence:
+    /// a German/English prompt on the "wrong" audio can skew detection, so only
+    /// the (largely language-neutral) vocabulary is passed. Selecting a concrete
+    /// language unlocks the full formatting hint.
+    static func recognitionPrompt(for language: LanguageSelection, vocabulary: String) -> String {
+        let base: String
+        switch language {
+        case .manual(.english):
+            base = "Clean English with proper capitalisation and punctuation."
+        case .manual(.german), .manual(.swissGerman):
+            base = "Schweizer Hochdeutsch. Saubere Gross-/Kleinschreibung und Interpunktion. "
+                 + "Zahlen, Daten und Uhrzeiten korrekt (z. B. 14:00 Uhr, 13. März)."
+        case .autoDetect:
+            base = ""
+        }
+
+        // Normalise the vocabulary (one term per line or comma-separated) and cap
+        // it — OpenAI only honours ~224 prompt tokens.
+        let vocab = vocabulary
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        let cappedVocab = String(vocab.prefix(480))
+
+        switch (base.isEmpty, cappedVocab.isEmpty) {
+        case (true, true):   return ""
+        case (true, false):  return cappedVocab
+        case (false, true):  return base
+        case (false, false): return base + " Eigennamen und Begriffe korrekt schreiben: \(cappedVocab)."
+        }
     }
 }
 

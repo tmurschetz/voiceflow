@@ -119,15 +119,17 @@ final class RecordingService {
     // MARK: - Private: AVAudioRecorder path (system default device)
 
     private func startRecorderRecording(to url: URL) throws {
-        // Speech-optimised capture: ASR models downsample to 16 kHz internally,
-        // so recording above that only inflates the upload. 16 kHz mono AAC at
-        // 32 kbps roughly halves file size vs the previous 44.1 kHz/high — a
-        // 30-second dictation is ~120 KB and uploads noticeably faster.
+        // Capture quality vs upload size: v1.0 recorded 16 kHz mono at 32 kbps —
+        // small and fast, but audibly compressed, and recognition quality tracks
+        // audio quality (names/compounds suffered vs. e.g. ChatGPT's recorder).
+        // 24 kHz mono AAC at 96 kbps is transparent for speech; a 30-second
+        // dictation is ~360 KB, which still uploads in well under a second.
         let settings: [String: Any] = [
             AVFormatIDKey:            Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey:          16_000,
+            AVSampleRateKey:          24_000,
             AVNumberOfChannelsKey:    1,
-            AVEncoderBitRateKey:      32_000
+            AVEncoderBitRateKey:      96_000,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
         audioRecorder = try AVAudioRecorder(url: url, settings: settings)
         guard audioRecorder?.record() == true else {

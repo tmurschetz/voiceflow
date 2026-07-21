@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Entitlements for the notarised Developer ID release. -->
+    <!-- Hardened Runtime is applied at sign time (codesign runtime option). -->
+    <!-- Minimal by design: -->
+    <!--   network.client  : api.openai.com + api.github.com (updates) -->
+    <!--   device.microphone / audio-input : microphone recording -->
+    <!-- No app sandbox. Accessibility text insertion and synthetic key events -->
+    <!-- are gated by the system TCC permission the user grants, not by an -->
+    <!-- entitlement. No keychain access group: KeychainStore uses the app's -->
+    <!-- default group, avoiding the Xcode-only AppIdentifierPrefix variable. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+</dict>
+</plist>

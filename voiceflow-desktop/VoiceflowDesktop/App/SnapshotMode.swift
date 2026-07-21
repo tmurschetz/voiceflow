@@ -38,14 +38,65 @@ enum SnapshotMode {
         settings.shortcutRandom   = "⌥3"
 
         var specs: [Spec] = [
-            Spec(name: "onboarding", size: NSSize(width: 460, height: 520),
-                 view: AnyView(OnboardingView(viewModel: OnboardingViewModel()))),
             Spec(name: "settings", size: NSSize(width: 580, height: 720),
                  view: AnyView(SettingsView(viewModel: SettingsViewModel(settingsService: SettingsService())))),
             // Full-height variant so design review sees every section without scrolling.
             Spec(name: "settings-full", size: NSSize(width: 580, height: 1540),
                  view: AnyView(SettingsScrollProbe()))
         ]
+
+        // Setup wizard — one snapshot per step.
+        for step in SetupWizardViewModel.Step.allCases {
+            let wvm = SetupWizardViewModel(settingsService: SettingsService())
+            wvm.step = step
+            specs.append(Spec(name: "wizard-\(step.rawValue)-\(step)", size: NSSize(width: 520, height: 600),
+                              view: AnyView(SetupWizardView(viewModel: wvm))))
+        }
+
+        // Wizard key step — managed-access variants (request form + waiting).
+        let reqVM = SetupWizardViewModel(settingsService: SettingsService())
+        reqVM.step = .apiKey
+        reqVM.keyStored = false
+        reqVM.keyMode = .request
+        specs.append(Spec(name: "wizard-1-apiKey-request", size: NSSize(width: 520, height: 600),
+                          view: AnyView(SetupWizardView(viewModel: reqVM))))
+        let pendVM = SetupWizardViewModel(settingsService: SettingsService())
+        pendVM.step = .apiKey
+        pendVM.keyStored = false
+        pendVM.keyMode = .request
+        pendVM.accountPhase = .pending
+        specs.append(Spec(name: "wizard-1-apiKey-pending", size: NSSize(width: 520, height: 600),
+                          view: AnyView(SetupWizardView(viewModel: pendVM))))
+
+        // History window — fixtures cover all modes, fallback, failure, long text.
+        let historyFixtures: [HistoryStore.Entry] = [
+            .init(date: Date(), mode: "private",
+                  raw: "also ähm das projekt läuft gut",
+                  final: "Das Projekt läuft gut.",
+                  audioSeconds: 6, success: true, usedFallback: false, errorMessage: nil),
+            .init(date: Date().addingTimeInterval(-3900), mode: "business",
+                  raw: "kannst du mir die unterlagen schicken",
+                  final: "Kannst du mir bitte die Unterlagen zusenden?",
+                  audioSeconds: 9, success: true, usedFallback: false, errorMessage: nil),
+            .init(date: Date().addingTimeInterval(-90_000), mode: "random",
+                  raw: "bitte schick mir die unterlagen bis morgen mittag",
+                  final: "please send me the documents by tomorrow noon",
+                  audioSeconds: 11, success: true, usedFallback: true, errorMessage: nil),
+            .init(date: Date().addingTimeInterval(-180_000), mode: "private",
+                  raw: "langer text",
+                  final: "Ich wollte dir nur kurz schreiben wegen dem Termin am Donnerstag. "
+                       + "Ich glaube, wir müssen den verschieben, weil ich da noch ein anderes "
+                       + "Meeting habe. Sag mir doch Bescheid, ob das für dich passt oder ob "
+                       + "wir lieber am Freitag machen. Danke dir und bis bald!",
+                  audioSeconds: 24, success: true, usedFallback: false, errorMessage: nil),
+            .init(date: Date().addingTimeInterval(-260_000), mode: "business",
+                  raw: nil, final: nil, audioSeconds: nil, success: false,
+                  usedFallback: false, errorMessage: "Keine Sprache aufgenommen.")
+        ]
+        specs.append(Spec(name: "history", size: NSSize(width: 520, height: 600),
+                          view: AnyView(HistoryView(entries: historyFixtures))))
+        specs.append(Spec(name: "history-empty", size: NSSize(width: 520, height: 600),
+                          view: AnyView(HistoryView(entries: []))))
 
         let panelStates: [(String, AppState, String?)] = [
             ("panel-idle",      .idle, nil),
