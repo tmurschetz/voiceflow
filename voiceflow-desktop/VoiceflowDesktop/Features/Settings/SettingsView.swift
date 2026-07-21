@@ -85,6 +85,20 @@ private struct APIKeySection: View {
 
     var body: some View {
         Section {
+            if AccountService.shared.isManaged {
+                HStack(spacing: 10) {
+                    IconBadge(systemName: "person.badge.shield.checkmark.fill", color: .green)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Verwalteter Zugang")
+                        Text("Von Thomas bereitgestellt — du musst nichts einrichten. Ein eigener Key unten ersetzt ihn.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                }
+            }
+
             HStack(spacing: 10) {
                 IconBadge(systemName: "key.fill", color: statusColor)
                 VStack(alignment: .leading, spacing: 1) {
@@ -137,6 +151,8 @@ private struct APIKeySection: View {
     }
 
     private var statusText: String {
+        // Managed keys are never shown, not even masked.
+        if AccountService.shared.isManaged { return "Aktiv (verwaltet)" }
         switch viewModel.apiKeyStatus {
         case .missing:   return "Kein Key hinterlegt"
         case .stored:    return "Hinterlegt (\(viewModel.maskedKey))"

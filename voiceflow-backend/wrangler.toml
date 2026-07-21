@@ -1,0 +1,26 @@
+# Voiceflow Accounts — key-issuing service (Variante B)
+#
+# Friends register from inside the app, Thomas approves, and a per-user
+# budget-capped OpenAI project key is provisioned and delivered ONCE.
+# Dictation traffic NEVER flows through this worker.
+#
+# Secrets (set via `wrangler secret put`, NEVER in this file / the repo):
+#   OPENAI_ADMIN_KEY  — OpenAI organization admin key (creates projects/keys)
+#   ADMIN_TOKEN       — long random token; only Thomas has it (approve/revoke)
+
+name = "voiceflow-accounts"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+[[kv_namespaces]]
+binding = "REGISTRY"
+id = "REPLACE_AFTER_WRANGLER_KV_CREATE"   # wrangler kv namespace create REGISTRY
+
+[vars]
+# "true" bypasses the real OpenAI Admin API and issues fake sk-test-… keys.
+# MUST be "false" (or absent) in production.
+TEST_MODE = "false"
+
+[env.dev]
+kv_namespaces = [{ binding = "REGISTRY", id = "dev" }]
+vars = { TEST_MODE = "true" }

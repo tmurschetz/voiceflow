@@ -19,18 +19,37 @@ struct StatusPanelView: View {
                 .padding(.bottom, 14)
                 .frame(maxWidth: .infinity)
 
-            // API key missing → prominent CTA
+            // API key missing → prominent CTA (or waiting hint while a managed
+            // access request is pending approval)
             if case .needsAPIKey = viewModel.state {
-                Button(action: onSettings) {
-                    Label("OpenAI API-Key eintragen", systemImage: "key.fill")
-                        .font(.callout.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                if AccountService.shared.isPending {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Wartet auf Freigabe")
+                                .font(.callout.weight(.medium))
+                            Text("Sobald Thomas dich freigibt, richtet sich Voiceflow selbst ein.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.blue.opacity(0.09)))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                } else {
+                    Button(action: onSettings) {
+                        Label("Einrichten (Zugang oder API-Key)", systemImage: "key.fill")
+                            .font(.callout.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 14)
             }
 
             Divider().padding(.horizontal, 12)

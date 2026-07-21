@@ -61,6 +61,22 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
   so the app opens with no right-click/Gatekeeper dance and permissions persist
   across updates. (`make release` builds → notarises → staples → packages the DMG.)
 
+### New — access for friends, no OpenAI account needed
+- The setup wizard now offers **"Zugang anfragen"** next to bring-your-own-key:
+  enter name + e-mail, Thomas approves on a small admin page, and the app
+  finishes setting itself up — the user never sees a key and pays nothing.
+- Under the hood ("Variante B", see `voiceflow-backend/`): a Cloudflare Worker
+  provisions a **per-user, budget-capped OpenAI project key** via the OpenAI
+  Admin API and delivers it **exactly once** into the app's Keychain. Dictation
+  still goes device → OpenAI directly — the service is never in the audio path.
+- Security: the OpenAI **admin key exists only as a server secret**; issued keys
+  are deleted server-side after pickup; remote **revoke acts as a kill switch**
+  (the app removes its local key on the next poll); registration is rate-limited;
+  status polling is token-based with no user enumeration; managed keys are never
+  displayed, not even masked.
+- Verified by a headless E2E (`--accounttest`) driving the real app code against
+  a local service: 14/14 checks (one-time delivery, no re-delivery, kill switch).
+
 ### New — history gets a real window
 - "Verlauf öffnen" now opens a proper **in-app history view** (was: revealing the
   raw `history.jsonl` in Finder): searchable, newest first, with mode badges,

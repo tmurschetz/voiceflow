@@ -24,6 +24,14 @@ final class SetupWizardViewModel: ObservableObject {
     @Published var keyError: String?
     @Published var keyStored: Bool = KeychainStore.hasAPIKey
 
+    // Managed access ("Zugang anfragen" — key is provisioned after approval)
+    enum KeyMode { case request, own }
+    @Published var keyMode: KeyMode = KeychainStore.hasAPIKey ? .own : .request
+    @Published var accessName = ""
+    @Published var accessEmail = ""
+    @Published var accountBusy = false
+    @Published var accountPhase: AccountService.Phase = AccountService.shared.phase
+
     private let settingsService: SettingsService
     var onComplete: () -> Void = {}
 
@@ -34,7 +42,41 @@ final class SetupWizardViewModel: ObservableObject {
         self.draft = settingsService.currentSettings ?? settingsService.loadSettings()
     }
 
-    var canLeaveKeyStep: Bool { keyStored }
+    /// Waiting for approval counts as done enough to continue the wizard —
+    /// the app finishes setup by itself once Thomas approves.
+    var canLeaveKeyStep: Bool { keyStored || accountPhase == .pending }
+
+    var canRequestAccess: Bool {
+        !accessName.trimmingCharacters(in: .whitespaces).isEmpty
+            && accessEmail.contains("@") && !accountBusy
+    }
+
+    func requestAccess() async {
+        accountBusy = true
+        defer { accountBusy = false }
+        _ = await AccountService.shared.requestAccess(
+            name: accessName.trimmingCharacters(in: .whitespaces),
+            email: accessEmail.trimmingCharacters(in: .whitespaces)
+        )
+        refreshAccountPhase()
+    }
+
+    func refreshAccountPhase() {
+        accountPhase = AccountService.shared.phase
+        keyStored = KeychainStore.hasAPIKey
+    }
+
+    /// Runs while the "waiting for approval" pane is visible: polls the service
+    /// so an approval lands without restarting the app. No-op unless the
+    /// service itself is in pending state (snapshot fixtures stay untouched).
+    func livePollWhilePendingVisible() async {
+        while !Task.isCancelled && AccountService.shared.phase == .pending {
+            _ = await AccountService.shared.pollOnce()
+            refreshAccountPhase()
+            if AccountService.shared.phase != .pending { break }
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+        }
+    }
 
     /// Validates the typed key against the OpenAI API and stores it in the Keychain.
     func validateAndStoreKey() async {
@@ -48,6 +90,9 @@ final class SetupWizardViewModel: ObservableObject {
             KeychainStore.apiKey = key
             apiKeyInput = ""
             keyStored = true
+            // An own key replaces a managed/pending account state.
+            AccountService.shared.detach()
+            refreshAccountPhase()
         } catch {
             keyError = error.localizedDescription
         }
@@ -236,43 +281,118 @@ private struct WelcomeStep: View {
 
 private struct APIKeyStep: View {
     @ObservedObject var viewModel: SetupWizardViewModel
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if viewModel.keyStored {
-                Label("Key ist hinterlegt (\(KeychainStore.maskedKey)).", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                Text("Du kannst weitergehen — oder unten einen anderen Key eintragen.")
-                    .font(.caption).foregroundStyle(.secondary)
+                if AccountService.shared.isManaged {
+                    Label("Dein Zugang ist eingerichtet — bereitgestellt von Thomas.", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                    Text("Du musst nichts weiter tun und siehst nie einen Key.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Label("Key ist hinterlegt (\(KeychainStore.maskedKey)).", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                    Text("Du kannst weitergehen — oder unten einen anderen Key eintragen.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ownKeyPane
+                }
             } else {
-                Text("Voiceflow nutzt dein eigenes OpenAI-Konto. Der Key bleibt lokal im Schlüsselbund und geht ausschliesslich an api.openai.com.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Key erstellen auf platform.openai.com ↗") {
-                    if let url = URL(string: Config.apiKeysURL) { NSWorkspace.shared.open(url) }
+                Picker("", selection: $viewModel.keyMode) {
+                    Text("Zugang anfragen").tag(SetupWizardViewModel.KeyMode.request)
+                    Text("Eigener API-Key").tag(SetupWizardViewModel.KeyMode.own)
                 }
-                .buttonStyle(.link)
-            }
+                .pickerStyle(.segmented)
+                .labelsHidden()
 
-            HStack(spacing: 8) {
-                SecureField(text: $viewModel.apiKeyInput, prompt: Text("sk-…")) { EmptyView() }
-                    .textFieldStyle(.roundedBorder).labelsHidden().font(.body.monospaced())
-                    .onSubmit { Task { await viewModel.validateAndStoreKey() } }
-                Button {
-                    Task { await viewModel.validateAndStoreKey() }
-                } label: {
-                    if viewModel.isValidatingKey { ProgressView().controlSize(.small) }
-                    else { Text(viewModel.keyStored ? "Ersetzen" : "Prüfen") }
+                if viewModel.keyMode == .request {
+                    requestPane
+                } else {
+                    Text("Voiceflow nutzt dein eigenes OpenAI-Konto. Der Key bleibt lokal im Schlüsselbund und geht ausschliesslich an api.openai.com.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Key erstellen auf platform.openai.com ↗") {
+                        if let url = URL(string: Config.apiKeysURL) { NSWorkspace.shared.open(url) }
+                    }
+                    .buttonStyle(.link)
+                    ownKeyPane
                 }
-                .disabled(viewModel.apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isValidatingKey)
             }
-
-            if let err = viewModel.keyError {
-                Label(err, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
-            }
-
-            Label("~0.3 Rappen pro Diktatminute, abgerechnet von OpenAI über deinen Key.", systemImage: "creditcard")
-                .font(.caption).foregroundStyle(.tertiary).padding(.top, 4)
         }
+    }
+
+    // MARK: Managed access ("Zugang anfragen")
+
+    @ViewBuilder private var requestPane: some View {
+        switch viewModel.accountPhase {
+        case .pending:
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Anfrage gesendet — wartet auf Freigabe.")
+                        .font(.callout.weight(.medium))
+                }
+                Text("Sobald Thomas dich freigibt, richtet sich Voiceflow von selbst ein — du siehst nie einen Key und musst nichts bezahlen. Du kannst dieses Fenster schliessen und schon mal die Shortcuts festlegen.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.blue.opacity(0.08)))
+            .task { await viewModel.livePollWhilePendingVisible() }
+        case .denied:
+            Label("Deine Anfrage wurde abgelehnt. Frag Thomas direkt — oder nutze unten einen eigenen Key.",
+                  systemImage: "hand.raised.fill")
+                .font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+        case .revoked:
+            Label("Dein Zugang wurde beendet. Frag Thomas — oder nutze einen eigenen Key.",
+                  systemImage: "hand.raised.fill")
+                .font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+        default:
+            Text("Kein OpenAI-Konto nötig: Du stellst eine Anfrage, Thomas gibt dich frei, und Voiceflow richtet sich automatisch ein — kostenlos für dich.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            TextField(text: $viewModel.accessName, prompt: Text("Dein Name")) { EmptyView() }
+                .textFieldStyle(.roundedBorder).labelsHidden()
+            TextField(text: $viewModel.accessEmail, prompt: Text("Deine E-Mail")) { EmptyView() }
+                .textFieldStyle(.roundedBorder).labelsHidden()
+            HStack(spacing: 10) {
+                Button {
+                    Task { await viewModel.requestAccess() }
+                } label: {
+                    if viewModel.accountBusy { ProgressView().controlSize(.small) }
+                    else { Text("Anfrage senden") }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!viewModel.canRequestAccess)
+                if let err = AccountService.shared.lastError {
+                    Text(err).font(.caption).foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    // MARK: Own key (bring your own key)
+
+    @ViewBuilder private var ownKeyPane: some View {
+        HStack(spacing: 8) {
+            SecureField(text: $viewModel.apiKeyInput, prompt: Text("sk-…")) { EmptyView() }
+                .textFieldStyle(.roundedBorder).labelsHidden().font(.body.monospaced())
+                .onSubmit { Task { await viewModel.validateAndStoreKey() } }
+            Button {
+                Task { await viewModel.validateAndStoreKey() }
+            } label: {
+                if viewModel.isValidatingKey { ProgressView().controlSize(.small) }
+                else { Text(viewModel.keyStored ? "Ersetzen" : "Prüfen") }
+            }
+            .disabled(viewModel.apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isValidatingKey)
+        }
+
+        if let err = viewModel.keyError {
+            Label(err, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+        }
+
+        Label("~0.6 Rappen pro Diktatminute, abgerechnet von OpenAI über deinen Key.", systemImage: "creditcard")
+            .font(.caption).foregroundStyle(.tertiary).padding(.top, 4)
     }
 }
 

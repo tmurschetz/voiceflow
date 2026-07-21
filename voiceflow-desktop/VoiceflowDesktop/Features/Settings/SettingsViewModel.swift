@@ -106,6 +106,8 @@ final class SettingsViewModel: ObservableObject {
             KeychainStore.apiKey = key
             apiKeyInput = ""
             apiKeyStatus = .validated
+            // An own key replaces a managed/pending account state.
+            AccountService.shared.detach()
         } catch {
             apiKeyStatus = .invalid(error.localizedDescription)
         }
@@ -114,6 +116,9 @@ final class SettingsViewModel: ObservableObject {
     func removeAPIKey() {
         KeychainStore.apiKey = nil
         apiKeyStatus = .missing
+        // If the key was provisioned by the accounts service, drop the managed
+        // state too — otherwise Settings would keep claiming "verwaltet".
+        AccountService.shared.detach()
     }
 
     // MARK: - Shortcut sync

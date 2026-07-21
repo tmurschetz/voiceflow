@@ -29,11 +29,13 @@
 		9FFDDCED614C4AB971B5FDAB /* OutputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80DCE96D78B121E661317F8E /* OutputService.swift */; };
 		ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69200CC3359B433509E3E7C5 /* KeychainStore.swift */; };
 		AEB7AF041A80190ACA9F329A /* SnapshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */; };
+		B2B69FE87D6124B158049CF1 /* AccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38BBBC6D256F12F2E950DC9B /* AccountService.swift */; };
 		BF28120A276704A257D10942 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E343432C4F9F38E5D28A7C20 /* HistoryView.swift */; };
 		BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */; };
 		C81E7932DD337171B42A703D /* RecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF41F43ECF611F7DF15B6D /* RecordingService.swift */; };
 		D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */; };
 		D6A966006881517287550B2A /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1278BBE0DFB6124FCF67EED0 /* Config.swift */; };
+		D9524282B76A821FBB3469AC /* AccountTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08734E1F27EC27E1637B0E97 /* AccountTest.swift */; };
 		DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986870957B3F79F64AE93655 /* SettingsService.swift */; };
 		EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */; };
 		FAA5C7B444751315BBA0874D /* SetupWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F64D0DCED6EBBDD39B8A0671 /* SetupWizardView.swift */; };
@@ -42,9 +44,11 @@
 
 /* Begin PBXFileReference section */
 		04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		08734E1F27EC27E1637B0E97 /* AccountTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTest.swift; sourceTree = "<group>"; };
 		1278BBE0DFB6124FCF67EED0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelViewModel.swift; sourceTree = "<group>"; };
 		2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceflowDesktopApp.swift; sourceTree = "<group>"; };
+		38BBBC6D256F12F2E950DC9B /* AccountService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountService.swift; sourceTree = "<group>"; };
 		45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uninstaller.swift; sourceTree = "<group>"; };
 		69200CC3359B433509E3E7C5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
@@ -130,6 +134,14 @@
 			path = History;
 			sourceTree = "<group>";
 		};
+		3793386214C992135F07B5EB /* Account */ = {
+			isa = PBXGroup;
+			children = (
+				38BBBC6D256F12F2E950DC9B /* AccountService.swift */,
+			);
+			path = Account;
+			sourceTree = "<group>";
+		};
 		4091656200CBE161CFDE8E75 /* VoiceflowDesktop */ = {
 			isa = PBXGroup;
 			children = (
@@ -198,6 +210,7 @@
 		85647E69AF6BF8F4BD6E5CF3 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				08734E1F27EC27E1637B0E97 /* AccountTest.swift */,
 				FA1019C2601FF3C184A5A05C /* AppDelegate.swift */,
 				9CE2A4BFB30B525DC9348755 /* SelfTest.swift */,
 				7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */,
@@ -274,6 +287,7 @@
 				1278BBE0DFB6124FCF67EED0 /* Config.swift */,
 				69200CC3359B433509E3E7C5 /* KeychainStore.swift */,
 				4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */,
+				3793386214C992135F07B5EB /* Account */,
 				739260BE9C1108D1B9C338E0 /* Logging */,
 				D642D68520AE8AFEEE3FDC37 /* OpenAI */,
 				0324C017D45034FF55213425 /* Output */,
@@ -358,6 +372,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2B69FE87D6124B158049CF1 /* AccountService.swift in Sources */,
+				D9524282B76A821FBB3469AC /* AccountTest.swift in Sources */,
 				9625DE809DF647E41737ED3F /* AppDelegate.swift in Sources */,
 				4D4F01FC9ACA55E62478A8A9 /* AppInfo.swift in Sources */,
 				BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */,

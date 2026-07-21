@@ -56,6 +56,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // Headless E2E of the managed-account flow against a local accounts
+        // service (--accounttest <url> <adminToken>) — in-memory store only.
+        if AccountTest.runIfRequested() {
+            return
+        }
+
         menuBarController = MenuBarController(delegate: self)
         resetAXPromptIfNewBuild()
 
@@ -80,6 +86,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController?.refreshRescueState()
 
         Task { await permissionsManager.requestRequiredPermissions() }
+
+        // Managed accounts: while an access request awaits approval, poll the
+        // accounts service; once approved the key installs itself and the menu
+        // bar flips to ready.
+        AccountService.shared.onPhaseChange = { [weak self] phase in
+            guard let self else { return }
+            let current = self.settingsService.currentSettings
+            switch phase {
+            case .active:
+                self.menuBarController?.update(state: .idle, settings: current)
+                self.showAccountActivatedAlert()
+            case .revoked, .denied:
+                if !KeychainStore.hasAPIKey {
+                    self.menuBarController?.update(state: .needsAPIKey, settings: current)
+                }
+            default:
+                break
+            }
+        }
+        if AccountService.shared.isPending {
+            AccountService.shared.startPolling()
+        }
 
         // Auto-update: check shortly after launch, then periodically (internally
         // throttled to ~once a day). Updates come from the app's public GitHub
@@ -382,6 +410,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         settingsWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// One-time celebration when a managed access request gets approved.
+    private func showAccountActivatedAlert() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Voiceflow ist freigeschaltet 🎉"
+        alert.informativeText = "Dein Zugang wurde eingerichtet. Drück deinen Shortcut, sprich los — fertig."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Los geht's")
+        alert.runModal()
     }
 
     func showHistoryWindow() {

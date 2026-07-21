@@ -53,6 +53,21 @@ enum SnapshotMode {
                               view: AnyView(SetupWizardView(viewModel: wvm))))
         }
 
+        // Wizard key step — managed-access variants (request form + waiting).
+        let reqVM = SetupWizardViewModel(settingsService: SettingsService())
+        reqVM.step = .apiKey
+        reqVM.keyStored = false
+        reqVM.keyMode = .request
+        specs.append(Spec(name: "wizard-1-apiKey-request", size: NSSize(width: 520, height: 600),
+                          view: AnyView(SetupWizardView(viewModel: reqVM))))
+        let pendVM = SetupWizardViewModel(settingsService: SettingsService())
+        pendVM.step = .apiKey
+        pendVM.keyStored = false
+        pendVM.keyMode = .request
+        pendVM.accountPhase = .pending
+        specs.append(Spec(name: "wizard-1-apiKey-pending", size: NSSize(width: 520, height: 600),
+                          view: AnyView(SetupWizardView(viewModel: pendVM))))
+
         // History window — fixtures cover all modes, fallback, failure, long text.
         let historyFixtures: [HistoryStore.Entry] = [
             .init(date: Date(), mode: "private",

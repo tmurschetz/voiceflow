@@ -228,6 +228,46 @@ enum SelfTest {
         check("Gleiche Version → 0", UpdateService.compareVersions("1.1.0", "1.1.0") == 0)
         check("Ältere erkannt (1.0.6 < 1.1.0)", UpdateService.compareVersions("1.0.6", "1.1.0") == -1)
 
+        // 14. Managed accounts — pure logic (network paths are covered by the
+        // separate --accounttest E2E against a local service).
+        print("\n[14] Verwalteter Zugang — Logik")
+        let t1 = AccountService.generateDeviceToken()
+        let t2 = AccountService.generateDeviceToken()
+        check("Gerätetoken = 64 Hex-Zeichen",
+              t1.count == 64 && t1.allSatisfy { "0123456789abcdef".contains($0) })
+        check("Gerätetokens einzigartig", t1 != t2)
+
+        let fixture = #"{"status":"approved","apiKey":"sk-test-abc"}"#.data(using: .utf8)!
+        let decoded = try? JSONDecoder().decode(AccountService.StatusResponse.self, from: fixture)
+        check("Status-Antwort dekodierbar", decoded?.apiKey == "sk-test-abc")
+
+        let machine = await MainActor.run { () -> [Bool] in
+            var memToken: String? = "x"
+            var memKey: String?
+            let store = AccountService.Store(
+                getDeviceToken: { memToken }, setDeviceToken: { memToken = $0 },
+                installAPIKey: { memKey = $0 }, removeAPIKey: { memKey = nil },
+                hasAPIKey: { memKey != nil })
+            let d = UserDefaults.standard
+            let m0 = d.bool(forKey: AccountService.managedFlagKey)
+            let p0 = d.bool(forKey: AccountService.pendingFlagKey)
+            defer {
+                d.set(m0, forKey: AccountService.managedFlagKey)
+                d.set(p0, forKey: AccountService.pendingFlagKey)
+            }
+            let s = AccountService(store: store, baseURL: { "http://invalid.local" })
+            s.apply(.init(status: "pending", apiKey: nil))
+            let r1 = s.phase == .pending
+            s.apply(.init(status: "approved", apiKey: "sk-test-xyz"))
+            let r2 = s.phase == .active && memKey == "sk-test-xyz"
+            s.apply(.init(status: "revoked", apiKey: nil))
+            let r3 = s.phase == .revoked && memKey == nil
+            return [r1, r2, r3]
+        }
+        check("pending → wartend", machine[0])
+        check("approved + Key → aktiv, Key installiert", machine[1])
+        check("revoked → Key lokal entfernt (Kill-Switch)", machine[2])
+
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")
         return failed == 0
