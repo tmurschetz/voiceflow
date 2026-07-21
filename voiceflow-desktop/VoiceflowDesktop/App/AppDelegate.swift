@@ -31,10 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController:          MenuBarController?
     private var onboardingWindowController: NSWindowController?
     private var settingsWindowController:   NSWindowController?
+    private var historyWindowController:    NSWindowController?
 
     // MARK: - Recording timer
 
     private var recordingTimer: Timer?
+
+    // MARK: - Auto-update timer
+
+    private var updateTimer: Timer?
 
     // MARK: - Lifecycle
 
@@ -54,6 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = MenuBarController(delegate: self)
         resetAXPromptIfNewBuild()
 
+        // One-time: upgrade users still on the old, less accurate default model.
+        settingsService.migrateTranscribeModelIfNeeded()
+
         // Load local settings + bind shortcuts immediately — no network needed.
         let settings = settingsService.loadSettings()
         ShortcutManager.shared.register(settings: settings) { [weak self] mode in
@@ -72,6 +80,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController?.refreshRescueState()
 
         Task { await permissionsManager.requestRequiredPermissions() }
+
+        // Auto-update: check shortly after launch, then periodically (internally
+        // throttled to ~once a day). Updates come from the app's public GitHub
+        // releases — see UpdateService.
+        UpdateService.shared.checkInBackground()
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { _ in
+            MainActor.assumeIsolated { UpdateService.shared.checkInBackground() }
+        }
     }
 
     /// Resets the "Accessibility already prompted" flag whenever a new binary is
@@ -132,6 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     audio: audio,
                     language: settings?.language ?? .autoDetect,
                     model: settings?.transcribeModel ?? TranscribeModel.recommended.id,
+                    vocabulary: settings?.customVocabulary ?? "",
                     onRetry: { [weak self] event in
                         self?.showRetryEvent(event)
                     }
@@ -263,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 audio: audio,
                 language: settings?.language ?? .autoDetect,
                 model: settings?.transcribeModel ?? TranscribeModel.recommended.id,
+                vocabulary: settings?.customVocabulary ?? "",
                 onRetry: { [weak self] event in self?.showRetryEvent(event) }
             )
             let processingResult = try await modeProcessor.process(
@@ -366,6 +384,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    func showHistoryWindow() {
+        // Recreate on every open so the list is always fresh (entries are loaded
+        // in HistoryView.onAppear; a cached window would show a stale list).
+        let enabled = settingsService.currentSettings?.historyEnabled ?? true
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Voiceflow — Verlauf"
+        window.center()
+        window.contentView = NSHostingView(rootView: HistoryView(historyEnabled: enabled))
+        window.isReleasedWhenClosed = false
+        historyWindowController = NSWindowController(window: window)
+        historyWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     // MARK: - Recording Timer
 
     private func startRecordingTimer() {
@@ -407,19 +444,12 @@ extension AppDelegate: MenuBarControllerDelegate {
     func menuBarDidRequestSetupWizard() { showOnboardingWindow() }
 
     func menuBarDidRequestHistory() {
-        // Reveal the local history file in Finder — it's the user's data.
-        NSWorkspace.shared.activateFileViewerSelecting([HistoryStore.shared.fileURL])
+        // In-app history window (v1.1) — "Im Finder zeigen" lives in its footer.
+        showHistoryWindow()
     }
 
     func menuBarDidRequestCheckForUpdates() {
-        // Sparkle not active in ad-hoc beta build — updates are distributed via DMG.
-        // Phase 2 (Developer ID + notarization) will re-enable this.
-        let alert = NSAlert()
-        alert.messageText = "Updates folgen bald"
-        alert.informativeText = "Auto-Updates sind in dieser Beta noch nicht aktiv. Du bekommst neue Versionen als DMG."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        UpdateService.shared.checkManually()
     }
 
     func menuBarDidRequestQuit() { NSApp.terminate(nil) }

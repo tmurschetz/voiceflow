@@ -20,6 +20,66 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.1.0] — 2026-06-24
+
+### Better transcription quality
+- The default transcription model is now **`gpt-4o-transcribe`** (was the cheaper
+  `gpt-4o-mini-transcribe`). It is noticeably more accurate on names, compounds and
+  domain terms — e.g. "Budget-Meeting" was mis-heard as "Birgley-Meeting" by the old
+  default. Existing installs are upgraded once, automatically.
+- **Higher recording quality**: dictations are now captured at 24 kHz / 96 kbps AAC
+  (was 16 kHz / 32 kbps — audibly compressed, which cost recognition accuracy).
+  A 30-second dictation is still only ~360 KB.
+- Every transcription now sends a short **recognition hint** (clean punctuation,
+  dates/times) when a language is selected — neutral on auto-detect so language
+  detection is never skewed.
+
+### Fixed — Business mode forced the Sie-form
+- When a dictation had no explicit du/Sie, the default rule fell back to the
+  **Sie-form**, so Business mode kept formalising ("kannst du…" → "Könnten Sie…").
+  New rule: the form of address is **never changed and never introduced** — a
+  dictated "du" stays "du", and neutral stays neutral.
+
+### New — your own dictionary ("learns your words")
+- A **Eigene Begriffe** field in Settings lets you list names, brands and project
+  terms. They're passed to the recogniser so they're spelled correctly instead of
+  guessed (e.g. "Mörschetz" → "Murschetz").
+
+### Simpler — no more model picking
+- Removed the transcription/text model pickers from Settings **and** the setup
+  wizard (now 3 steps instead of 4). Voiceflow just uses the most accurate model.
+  Quality over fiddly choices.
+
+### New — automatic updates
+- Voiceflow now checks the public GitHub releases **once a day** and offers the
+  update with its release notes: *update now / later / always automatic*. With
+  "automatisch" enabled it downloads, **verifies the Developer ID signature**, and
+  self-installs. Also reachable via the menu's "Nach Updates suchen…".
+
+### New — signed & notarised
+- Public builds are now signed with a **Developer ID** and **notarised by Apple**,
+  so the app opens with no right-click/Gatekeeper dance and permissions persist
+  across updates. (`make release` builds → notarises → staples → packages the DMG.)
+
+### New — history gets a real window
+- "Verlauf öffnen" now opens a proper **in-app history view** (was: revealing the
+  raw `history.jsonl` in Finder): searchable, newest first, with mode badges,
+  time & duration, expandable text and per-entry copy. Failures are dimmed with
+  their error; raw-fallback results are tagged. Footer: delete-with-confirmation
+  and a "Im Finder zeigen" link for the file itself.
+- Status panel: new **Verlauf** button; footer reorganised (Verlauf ·
+  Einstellungen · Beenden, version underneath); popover width now matches the
+  panel (300pt).
+
+### Earlier in 1.1
+- First-run **Setup Wizard** (API key → shortcuts → permissions).
+
+### Tests
+- `--selftest` extended to 30 checks (model default, recognition prompt + vocabulary
+  rules, update version comparison).
+
+---
+
 ## [1.0.6] — 2026-06-23
 
 ### Fixed — empty recording caused a confusing error and got stuck

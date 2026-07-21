@@ -45,22 +45,27 @@ party's server.
     instruction is empty. See [Modes & custom instructions](#modes--custom-instructions).
 - **Custom instruction per mode** — personalise the output; the instruction is
   applied on every dictation and can control tone, language, dialect or formatting
-- **Fast** — `gpt-4o-mini-transcribe` (roughly half the price and latency of
-  Whisper), 16 kHz speech-optimized recording, and the connection is pre-warmed
-  while you speak. A typical dictation is ready in ~2 seconds.
-- **Pick your models** — choose the transcription model (GPT-4o mini Transcribe ·
-  GPT-4o Transcribe · Whisper) and the text model (GPT-4o mini · GPT-4o), each
-  with a plain-language hint about speed, cost and languages
+- **Accurate & fast** — Voiceflow simply uses the most accurate transcription
+  model (`gpt-4o-transcribe`) with high-quality 24 kHz capture and a recognition
+  hint for clean punctuation — no model picking. The connection is pre-warmed
+  while you speak; a typical dictation is ready in ~2 seconds.
+- **Your own dictionary** — list your names, brands and domain terms once
+  (Settings → Wörterbuch) and they're spelled correctly in every dictation
+  instead of being guessed phonetically
+- **Auto-update** — checks the releases once a day and offers new versions with
+  their release notes: update now, later, or fully automatic (signature-verified)
 - **Languages** — German, Swiss German dialect (output in Swiss Standard German
   by default, or keep the dialect via a custom instruction) and English, all
-  auto-detected. Whisper covers 98 languages for everything else.
-- **Du / Sie aware** — mirrors the register you actually spoke
+  auto-detected.
+- **Du / Sie aware** — keeps the form of address exactly as dictated and never
+  "upgrades" du to Sie for politeness
 - **Never loses a recording** — transient API failures retry automatically with
   a visible countdown, then fall back to the raw transcript; a failed dictation
   is even rescued so you can retry it from the menu
 - **Private by design** — your API key lives in the macOS Keychain, the dictation
-  history is stored locally only (optional, deletable), and there is no telemetry.
-  A built-in **trace-free uninstall** removes everything in one click.
+  history is stored locally only (searchable in-app, optional, deletable), and
+  there is no telemetry. A built-in **trace-free uninstall** removes everything
+  in one click.
 
 ## A look inside
 
@@ -72,10 +77,12 @@ party's server.
 
 1. Download the latest `.dmg` from the [**Releases**](https://github.com/tmurschetz/voiceflow/releases/latest)
    page and drag Voiceflow into Applications.
-2. First launch: **right-click → Open → Open** (the beta isn't notarized yet).
-3. Paste your OpenAI API key into the setup window
-   ([create one here](https://platform.openai.com/api-keys)).
-4. Record your shortcuts in Settings and grant Microphone + Accessibility.
+2. Open it — from **1.1.0** the app is Developer-ID signed and notarized by
+   Apple, so it launches without any Gatekeeper dance. (Older betas: right-click
+   → Open → Open.)
+3. The setup wizard walks you through the rest: OpenAI API key
+   ([create one here](https://platform.openai.com/api-keys)), shortcuts, and
+   Microphone + Accessibility permissions.
 
 Full step-by-step guide, including the one-time Keychain prompt:
 [INSTALL.md](voiceflow-desktop/INSTALL.md).
@@ -139,9 +146,9 @@ So "I speak German and Swiss German comes out" is **not** a default — it only
 happens if your instruction asks for it. Want that as a permanent mode? Put the
 dialect instruction in Random and leave it there.
 
-> 💡 For the most authentic Swiss-German dialect, set the text model to **GPT-4o**
-> (Settings → Modelle → Text-Veredelung) — it writes noticeably better Mundart
-> than GPT-4o mini.
+> 💡 Swiss-German dialect output is inherently fuzzy — Mundart has no standard
+> spelling, so expect a "Standard-Zürich" flavour rather than your exact village
+> dialect. Adding example phrases in your own spelling to the instruction helps.
 
 ## Building from source
 
@@ -150,7 +157,8 @@ Requirements: Xcode 15+, [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
 ```sh
 make install        # build a Release .app, install to /Applications, launch
-make dmg            # build the distributable DMG
+make dmg            # ad-hoc signed DMG (internal beta, no Apple account needed)
+make release        # Developer-ID signed + notarized + stapled DMG (public release)
 make icon           # regenerate the app icon + menu bar template from AppIcon.png
 make release-notes  # update CHANGELOG.md from git history
 ```
@@ -166,12 +174,12 @@ swift scripts/promo-video.swift out.gif
 Voiceflow --selftest path/to/german-clip.m4a
 ```
 
-## Known limitations (beta)
+## Known limitations
 
-- **Ad-hoc signed** — the first launch needs right-click → Open, and the Keychain
-  asks once ("Always Allow"). A Developer ID + notarization will remove both.
-- **No auto-update yet** — new versions ship as DMGs on the Releases page
-  (Sparkle is wired up, pending the Developer ID).
+- **Batch, not live** — the transcript appears after you stop recording, not
+  while you speak. (A streaming "live raw mode" is on the idea list.)
+- **Swiss-German dialect output** is a best effort — Mundart has no standard
+  orthography, so no tool gets "your" spelling exactly right.
 
 ## License
 

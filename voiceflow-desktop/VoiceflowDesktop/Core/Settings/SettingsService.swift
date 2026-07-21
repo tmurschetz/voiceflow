@@ -27,6 +27,27 @@ final class SettingsService: ObservableObject {
         return settings
     }
 
+    // MARK: - Migration
+
+    /// One-time upgrade of the default transcription model. Builds up to 1.0.x
+    /// defaulted to `gpt-4o-mini-transcribe` (cheapest, but noticeably less
+    /// accurate — it mishears compounds and names, e.g. "Budget" → "Birgley").
+    /// 1.1 makes `gpt-4o-transcribe` the default. Users who are still on the old
+    /// default are upgraded once; the flag guarantees we never override a later
+    /// deliberate choice (and that someone who *wants* the cheaper model can
+    /// re-select it and have it stick).
+    func migrateTranscribeModelIfNeeded() {
+        let flag = "com.voiceflow.desktop.transcribeModelMigrated_v1"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        UserDefaults.standard.set(true, forKey: flag)
+
+        var settings = loadSettings()
+        guard settings.transcribeModel == "gpt-4o-mini-transcribe" else { return }
+        settings.transcribeModel = "gpt-4o-transcribe"
+        try? saveSettings(settings)
+        NSLog("[VF-Settings] Migrated transcription model: gpt-4o-mini-transcribe → gpt-4o-transcribe")
+    }
+
     // MARK: - Save
 
     /// Persists settings locally. Validates shortcut uniqueness first.

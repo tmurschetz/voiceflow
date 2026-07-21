@@ -67,7 +67,7 @@ enum SelfTest {
         let textModel = TextModel.recommended.id
 
         // 1. Transcription (v1.0.1 baseline) — only if an audio file was given
-        print("\n[1] Transkription (gpt-4o-mini-transcribe)")
+        print("\n[1] Transkription (\(transcribeModel))")
         if let audioPath, FileManager.default.fileExists(atPath: audioPath) {
             let audio = RecordedAudio(fileURL: URL(fileURLWithPath: audioPath))
             do {
@@ -100,6 +100,17 @@ enum SelfTest {
             check("Nicht leer & umgeschrieben", out.count > 10)
             check("Kein 'ß' (Schweizer Schreibweise)", !out.contains("ß"))
             check("Hochdeutsch (kein Dialekt)", dialectScore(out) <= 1, detail: "score \(dialectScore(out))")
+        }
+
+        // 3b. Business must NEVER formalise the form of address (v1.1 fix:
+        // a dictated "du" used to come back as "Sie").
+        if let out = await process(processor, "kannst du mir bitte die unterlagen bis morgen mittag schicken danke dir",
+                                   mode: .business, instruction: "", textModel: textModel) {
+            let low = " " + out.lowercased() + " "
+            let keptDu = low.contains(" du ") || low.contains(" dir") || low.contains(" dich")
+            let forcedSie = low.contains("ihnen") || low.contains("können sie") || low.contains("könnten sie")
+            check("Business behält 'du' (keine Sie-Form erzwungen)", keptDu && !forcedSie,
+                  detail: "Output: \(out)")
         }
 
         // 4. Guardrail — a QUESTION must be cleaned up, not answered (v1.0.4 fix)
@@ -181,6 +192,41 @@ enum SelfTest {
                   !TranscriptionService.isEmptyRecording(data: realData,
                                                         url: URL(fileURLWithPath: audioPath)))
         }
+
+        // 12. v1.1 quality: default model + recognition-prompt / vocabulary logic.
+        print("\n[12] Standardmodell & Erkennungs-Prompt (v1.1)")
+        check("Standard-Transkriptionsmodell = gpt-4o-transcribe",
+              TranscribeModel.recommended.id == "gpt-4o-transcribe",
+              detail: "ist \(TranscribeModel.recommended.id)")
+
+        let pDE = TranscriptionService.recognitionPrompt(for: .manual(.german), vocabulary: "")
+        check("Deutsch-Prompt enthält Formatierungshinweis", pDE.contains("Interpunktion"))
+
+        let pAuto = TranscriptionService.recognitionPrompt(for: .autoDetect, vocabulary: "")
+        check("Auto-Erkennung ohne Vokabular → kein Prompt (kein Sprach-Bias)",
+              pAuto.isEmpty, detail: "war \"\(pAuto)\"")
+
+        let pVocab = TranscriptionService.recognitionPrompt(for: .manual(.german),
+                                                            vocabulary: "Murschetz\nVoiceflow")
+        check("Vokabular eingebettet & Zeilen→Kommas",
+              pVocab.contains("Murschetz, Voiceflow"), detail: pVocab)
+
+        let pAutoVocab = TranscriptionService.recognitionPrompt(for: .autoDetect, vocabulary: "Zürich")
+        check("Auto-Erkennung mit Vokabular → nur Begriffe", pAutoVocab == "Zürich",
+              detail: "war \"\(pAutoVocab)\"")
+
+        let pCap = TranscriptionService.recognitionPrompt(for: .manual(.german),
+                                                          vocabulary: String(repeating: "x", count: 1000))
+        check("Vokabular auf ~480 Zeichen gekappt",
+              pCap.filter { $0 == "x" }.count <= 480,
+              detail: "\(pCap.filter { $0 == "x" }.count) x-Zeichen")
+
+        // 13. Auto-update version comparison (v1.1, GitHub-releases updater).
+        print("\n[13] Auto-Update — Versionsvergleich")
+        check("1.1.0 > 1.0.6", UpdateService.compareVersions("1.1.0", "1.0.6") == 1)
+        check("v-Präfix toleriert (v1.2.0 > 1.1.0)", UpdateService.compareVersions("v1.2.0", "1.1.0") == 1)
+        check("Gleiche Version → 0", UpdateService.compareVersions("1.1.0", "1.1.0") == 0)
+        check("Ältere erkannt (1.0.6 < 1.1.0)", UpdateService.compareVersions("1.0.6", "1.1.0") == -1)
 
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")

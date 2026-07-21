@@ -72,21 +72,21 @@ final class OpenAIClient {
     /// error), falls back to whisper-1 for this call — without overriding the
     /// user's choice in Settings.
     func transcribe(audioData: Data, fileExt: String, languageCode: String?,
-                    model: String, apiKey: String) async throws -> Transcription {
+                    model: String, apiKey: String, prompt: String? = nil) async throws -> Transcription {
         do {
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
-                                            languageCode: languageCode, model: model, apiKey: apiKey)
+                                            languageCode: languageCode, model: model, apiKey: apiKey, prompt: prompt)
         } catch let OpenAIError.httpError(code, message) where model != "whisper-1"
                     && (code == 400 || code == 403 || code == 404)
                     && message.lowercased().contains("model") {
             NSLog("[OpenAIClient] %@ unavailable (%d) — falling back to whisper-1 for this call", model, code)
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
-                                            languageCode: languageCode, model: "whisper-1", apiKey: apiKey)
+                                            languageCode: languageCode, model: "whisper-1", apiKey: apiKey, prompt: prompt)
         }
     }
 
     private func transcribeOnce(audioData: Data, fileExt: String, languageCode: String?,
-                                model: String, apiKey: String) async throws -> Transcription {
+                                model: String, apiKey: String, prompt: String? = nil) async throws -> Transcription {
         let boundary = "VF-\(UUID().uuidString)"
         let mimeType = fileExt == "m4a" ? "audio/m4a" : "audio/x-caf"
 
@@ -96,6 +96,11 @@ final class OpenAIClient {
         body.appendFormField(name: "response_format", value: "json", boundary: boundary)
         if let languageCode {
             body.appendFormField(name: "language", value: languageCode, boundary: boundary)
+        }
+        // Recognition bias: nudges spelling/punctuation and feeds the user's
+        // custom vocabulary so names/terms are written correctly, not guessed.
+        if let prompt, !prompt.isEmpty {
+            body.appendFormField(name: "prompt", value: prompt, boundary: boundary)
         }
         body.appendFilePart(name: "file", filename: "audio.\(fileExt)", mimeType: mimeType,
                             data: audioData, boundary: boundary)

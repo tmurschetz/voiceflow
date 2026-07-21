@@ -12,7 +12,7 @@ import KeyboardShortcuts
 final class SetupWizardViewModel: ObservableObject {
 
     enum Step: Int, CaseIterable {
-        case welcome, apiKey, models, shortcuts, permissions, done
+        case welcome, apiKey, shortcuts, permissions, done
     }
 
     @Published var step: Step = .welcome
@@ -136,9 +136,9 @@ struct SetupWizardView: View {
                 HStack {
                     Text(stepTitle).font(.title3.bold())
                     Spacer()
-                    Text("Schritt \(viewModel.step.rawValue)/4").font(.caption).foregroundStyle(.secondary)
+                    Text("Schritt \(viewModel.step.rawValue)/3").font(.caption).foregroundStyle(.secondary)
                 }
-                ProgressDots(current: viewModel.step.rawValue, total: 4)
+                ProgressDots(current: viewModel.step.rawValue, total: 3)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -148,7 +148,6 @@ struct SetupWizardView: View {
     private var stepTitle: String {
         switch viewModel.step {
         case .apiKey:      return "OpenAI API-Key"
-        case .models:      return "Modelle"
         case .shortcuts:   return "Shortcuts"
         case .permissions: return "Berechtigungen"
         default:           return ""
@@ -161,7 +160,6 @@ struct SetupWizardView: View {
         switch viewModel.step {
         case .welcome:      WelcomeStep()
         case .apiKey:       APIKeyStep(viewModel: viewModel)
-        case .models:       ModelsStep(draft: $viewModel.draft)
         case .shortcuts:    ShortcutsStep()
         case .permissions:  PermissionsStep()
         case .done:         DoneStep(draft: viewModel.draft)
@@ -224,12 +222,10 @@ private struct ProgressDots: View {
 private struct WelcomeStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("In vier kurzen Schritten bist du startklar:")
+            Text("In drei kurzen Schritten bist du startklar:")
                 .font(.callout).foregroundStyle(.secondary)
             WizFeature(icon: "key.fill", color: .blue, title: "Dein OpenAI-Key",
                        text: "Bleibt im Schlüsselbund dieses Macs — kein Login, keine Cloud dazwischen.")
-            WizFeature(icon: "waveform", color: .cyan, title: "Modelle wählen",
-                       text: "Tempo, Qualität und Sprachen — mit Empfehlung.")
             WizFeature(icon: "command", color: .indigo, title: "Shortcuts festlegen",
                        text: "Drei Tasten für Privat, Business und Random.")
             WizFeature(icon: "checkmark.shield.fill", color: .green, title: "Berechtigungen",
@@ -276,32 +272,6 @@ private struct APIKeyStep: View {
 
             Label("~0.3 Rappen pro Diktatminute, abgerechnet von OpenAI über deinen Key.", systemImage: "creditcard")
                 .font(.caption).foregroundStyle(.tertiary).padding(.top, 4)
-        }
-    }
-}
-
-private struct ModelsStep: View {
-    @Binding var draft: AppSettings
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Transkription (Sprache → Text)", systemImage: "waveform").font(.callout.weight(.medium))
-                Picker("", selection: $draft.transcribeModel) {
-                    ForEach(TranscribeModel.all) { Text($0.name).tag($0.id) }
-                }.labelsHidden().pickerStyle(.menu)
-                Text(TranscribeModel.byID(draft.transcribeModel).guidance)
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Text-Veredelung (Ton & Korrektur)", systemImage: "wand.and.stars").font(.callout.weight(.medium))
-                Picker("", selection: $draft.textModel) {
-                    ForEach(TextModel.all) { Text($0.name).tag($0.id) }
-                }.labelsHidden().pickerStyle(.menu)
-                Text(TextModel.byID(draft.textModel).guidance)
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
-            Text("Die Voreinstellungen passen für die meisten. Du kannst das später jederzeit in den Einstellungen ändern.")
-                .font(.caption).foregroundStyle(.tertiary)
         }
     }
 }

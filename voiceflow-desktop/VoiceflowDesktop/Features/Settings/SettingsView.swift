@@ -18,7 +18,7 @@ struct SettingsView: View {
                 APIKeySection(viewModel: viewModel)
                 GeneralSection(viewModel: viewModel)
                 ModesSection(viewModel: viewModel)
-                ModelSection(viewModel: viewModel)
+                VocabularySection(viewModel: viewModel)
                 LanguageSection(viewModel: viewModel)
                 OutputSection(viewModel: viewModel)
                 PermissionsSection()
@@ -159,12 +159,17 @@ private struct APIKeySection: View {
 
 private struct GeneralSection: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @AppStorage(UpdateService.autoUpdateKey) private var autoUpdate = false
 
     var body: some View {
         Section("Allgemein") {
             HStack(spacing: 10) {
                 IconBadge(systemName: "power", color: .gray)
                 Toggle("Bei Anmeldung starten", isOn: $viewModel.launchAtLogin)
+            }
+            HStack(spacing: 10) {
+                IconBadge(systemName: "arrow.triangle.2.circlepath", color: .green)
+                Toggle("Updates automatisch installieren", isOn: $autoUpdate)
             }
         }
     }
@@ -242,50 +247,41 @@ private struct ModeRow: View {
     }
 }
 
-// MARK: - Section: Models
+// MARK: - Section: Dictionary (custom vocabulary)
 
-private struct ModelSection: View {
+private struct VocabularySection: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
-                    IconBadge(systemName: "waveform", color: .cyan)
-                    Picker("Transkription", selection: $viewModel.draft.transcribeModel) {
-                        ForEach(TranscribeModel.all) { model in
-                            Text(model.name).tag(model.id)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                    IconBadge(systemName: "character.book.closed.fill", color: .teal)
+                    Text("Eigene Begriffe")
+                    Spacer()
                 }
-                Text(TranscribeModel.byID(viewModel.draft.transcribeModel).guidance)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 34)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 10) {
-                    IconBadge(systemName: "wand.and.stars", color: .purple)
-                    Picker("Text-Veredelung", selection: $viewModel.draft.textModel) {
-                        ForEach(TextModel.all) { model in
-                            Text(model.name).tag(model.id)
-                        }
-                    }
-                    .pickerStyle(.menu)
+                TextField(
+                    text: $viewModel.draft.customVocabulary,
+                    prompt: Text("z. B. Murschetz, Voiceflow, Zürich, Projektnamen, Fachbegriffe …"),
+                    axis: .vertical
+                ) {
+                    EmptyView()
                 }
-                Text(TextModel.byID(viewModel.draft.textModel).guidance)
+                .textFieldStyle(.roundedBorder)
+                .labelsHidden()
+                .font(.caption)
+                .lineLimit(2...4)
+                .padding(.leading, 34)
+                Text("Namen, Marken und Fachbegriffe, die korrekt geschrieben werden sollen — sie werden der Transkription bei jedem Diktat als Hinweis mitgegeben.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.leading, 34)
                     .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
-            Text("Modelle")
+            Text("Wörterbuch")
         } footer: {
-            Text("Sprachen: Alle Modelle beherrschen Deutsch, Schweizerdeutsch und Englisch sehr gut. Für seltenere Sprachen (z. B. Rätoromanisch-nahe Idiome, Osteuropäisch, Asiatisch) ist Whisper mit 98 Sprachen die sicherste Wahl.")
+            Text("Voiceflow nutzt automatisch das genaueste Transkriptionsmodell — du musst nichts auswählen.")
                 .font(.caption)
         }
     }

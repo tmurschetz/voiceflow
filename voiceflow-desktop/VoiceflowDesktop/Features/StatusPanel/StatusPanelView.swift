@@ -9,6 +9,7 @@ struct StatusPanelView: View {
     var onSettings: () -> Void
     var onQuit: () -> Void
     var onRetryRescue: () -> Void = {}
+    var onHistory: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,32 +72,42 @@ struct StatusPanelView: View {
                 Divider().padding(.horizontal, 12)
             }
 
-            // Footer
-            HStack {
-                Button(action: onSettings) {
-                    Label("Einstellungen", systemImage: "gearshape")
-                        .font(.callout)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+            // Footer: three quiet actions, version tucked underneath.
+            VStack(spacing: 6) {
+                HStack {
+                    Button(action: onHistory) {
+                        Label("Verlauf", systemImage: "clock.arrow.circlepath")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
 
-                Spacer()
+                    Spacer()
+
+                    Button(action: onSettings) {
+                        Label("Einstellungen", systemImage: "gearshape")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button(action: onQuit) {
+                        Label("Beenden", systemImage: "power")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
 
                 Text(AppInfo.displayString)
                     .font(.caption2)
                     .foregroundStyle(.quaternary)
-
-                Spacer()
-
-                Button(action: onQuit) {
-                    Label("Beenden", systemImage: "power")
-                        .font(.callout)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
         }
         .frame(width: 300)
         .background(.regularMaterial)

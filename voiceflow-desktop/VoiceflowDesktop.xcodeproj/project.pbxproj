@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */; };
 		08F8F8268F17A6BB579C29A4 /* ShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4AE4459614E88846D38FC3E /* ShortcutManager.swift */; };
+		0EAB16594618F020B2372402 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991838395AC120A56F7F704E /* UpdateService.swift */; };
 		25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D890CA6F7B69B61E3FEB566E /* StatusPanelView.swift */; };
 		267C9E58CC635208243DC33B /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E5FA3A581A678762801BEF8A /* CoreAudio.framework */; };
 		36F3E0BC45A7D6359355C01B /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = B6D686FB7744045773898F27 /* KeyboardShortcuts */; };
@@ -28,6 +29,7 @@
 		9FFDDCED614C4AB971B5FDAB /* OutputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80DCE96D78B121E661317F8E /* OutputService.swift */; };
 		ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69200CC3359B433509E3E7C5 /* KeychainStore.swift */; };
 		AEB7AF041A80190ACA9F329A /* SnapshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */; };
+		BF28120A276704A257D10942 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E343432C4F9F38E5D28A7C20 /* HistoryView.swift */; };
 		BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */; };
 		C81E7932DD337171B42A703D /* RecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF41F43ECF611F7DF15B6D /* RecordingService.swift */; };
 		D3F9AC07E2D057F78375514A /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */; };
@@ -40,7 +42,6 @@
 
 /* Begin PBXFileReference section */
 		04D4C6EFEA4878EB003EAB92 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
-		0C747F1BF22B506D33DD7CF9 /* VoiceflowDesktop-adhoc.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "VoiceflowDesktop-adhoc.entitlements"; sourceTree = "<group>"; };
 		1278BBE0DFB6124FCF67EED0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelViewModel.swift; sourceTree = "<group>"; };
 		2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceflowDesktopApp.swift; sourceTree = "<group>"; };
@@ -55,6 +56,7 @@
 		88CF41F43ECF611F7DF15B6D /* RecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingService.swift; sourceTree = "<group>"; };
 		9694776FC320681A74AFC58C /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		986870957B3F79F64AE93655 /* SettingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsService.swift; sourceTree = "<group>"; };
+		991838395AC120A56F7F704E /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		9CE2A4BFB30B525DC9348755 /* SelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTest.swift; sourceTree = "<group>"; };
 		A0C8A93DE5C2E1C773207B17 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
 		BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
@@ -64,6 +66,7 @@
 		D263E9D2AEE6F1A5E6B3B6D7 /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		D6E54FA4A154C550C8E6FA3B /* RescueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RescueStore.swift; sourceTree = "<group>"; };
 		D890CA6F7B69B61E3FEB566E /* StatusPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelView.swift; sourceTree = "<group>"; };
+		E343432C4F9F38E5D28A7C20 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		E4AE4459614E88846D38FC3E /* ShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutManager.swift; sourceTree = "<group>"; };
 		E5FA3A581A678762801BEF8A /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		F64D0DCED6EBBDD39B8A0671 /* SetupWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupWizardView.swift; sourceTree = "<group>"; };
@@ -119,6 +122,14 @@
 			path = Processing;
 			sourceTree = "<group>";
 		};
+		32120493AE16955883E2F760 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				E343432C4F9F38E5D28A7C20 /* HistoryView.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
 		4091656200CBE161CFDE8E75 /* VoiceflowDesktop */ = {
 			isa = PBXGroup;
 			children = (
@@ -126,10 +137,17 @@
 				CFD1A8EA7A0DE38AC2DFE626 /* Core */,
 				9DD107E5A0A718640EEDB454 /* Features */,
 				A8A892FED312B3C49731C893 /* Permissions */,
-				A00938A9DA92AB1BB943CF54 /* Resources */,
 				843117B1EC89EFCFA5EB8463 /* Shortcuts */,
 			);
 			path = VoiceflowDesktop;
+			sourceTree = "<group>";
+		};
+		4300E16850E38B28426C76E7 /* Update */ = {
+			isa = PBXGroup;
+			children = (
+				991838395AC120A56F7F704E /* UpdateService.swift */,
+			);
+			path = Update;
 			sourceTree = "<group>";
 		};
 		547EAED2B55204E09F29393E /* StatusPanel */ = {
@@ -191,20 +209,13 @@
 		9DD107E5A0A718640EEDB454 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				32120493AE16955883E2F760 /* History */,
 				C47CB87F36F6007FA6F4C824 /* MenuBar */,
 				A05B61F873EAD2B657A8409C /* Onboarding */,
 				83BE3F79BEFEEF45D676376B /* Settings */,
 				547EAED2B55204E09F29393E /* StatusPanel */,
 			);
 			path = Features;
-			sourceTree = "<group>";
-		};
-		A00938A9DA92AB1BB943CF54 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				0C747F1BF22B506D33DD7CF9 /* VoiceflowDesktop-adhoc.entitlements */,
-			);
-			path = Resources;
 			sourceTree = "<group>";
 		};
 		A0235D5B545AFCB54D55CE2E /* Transcription */ = {
@@ -270,6 +281,7 @@
 				BC76843FFE9518EB41C63A52 /* Recording */,
 				00F51720B2341B464059D3F5 /* Settings */,
 				A0235D5B545AFCB54D55CE2E /* Transcription */,
+				4300E16850E38B28426C76E7 /* Update */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -314,7 +326,7 @@
 				LastUpgradeCheck = 1500;
 				TargetAttributes = {
 					9F1D009956C8ADA3F5636127 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = GD42PF6FBY;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -351,6 +363,7 @@
 				BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */,
 				D6A966006881517287550B2A /* Config.swift in Sources */,
 				71E1D703CE2BABDD76AA419A /* HistoryStore.swift in Sources */,
+				BF28120A276704A257D10942 /* HistoryView.swift in Sources */,
 				ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */,
 				9BF714C42461818F5C317E3F /* MenuBarController.swift in Sources */,
 				3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */,
@@ -370,6 +383,7 @@
 				0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */,
 				EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */,
 				37AD9CC284EC6920152BD21E /* Uninstaller.swift in Sources */,
+				0EAB16594618F020B2372402 /* UpdateService.swift in Sources */,
 				64EBA98BCC8FD1F558D860C5 /* VoiceflowDesktopApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -428,9 +442,9 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = GD42PF6FBY;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -445,7 +459,7 @@
 				INFOPLIST_FILE = VoiceflowDesktop/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.voiceflow.desktop;
@@ -493,9 +507,9 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 18;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = GD42PF6FBY;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -516,7 +530,7 @@
 				INFOPLIST_FILE = VoiceflowDesktop/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

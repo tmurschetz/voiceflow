@@ -110,8 +110,9 @@ enum ProcessingMode: String, CaseIterable {
         German (Schweizer Hochdeutsch, "ss" instead of "ß", Swiss vocabulary); English → English. \
         If the custom instruction asks for a different language or for spoken Swiss-German dialect \
         (Mundart), follow the instruction instead — including dialect spelling.
-        - Mirror the speaker's register: du/dich/dir → Du-form; Sie/Ihnen → Sie-form; if unclear, \
-        Sie-form (German) or neutral (English).
+        - Form of address: NEVER change it. du/dich/dir stays Du-form, Sie/Ihnen stays Sie-form. \
+        If the dictation contains no form of address, do NOT introduce one — keep the phrasing \
+        neutral. Never "upgrade" du to Sie for politeness or professionalism.
         - Apply self-corrections: "am Montag — nein, am Dienstag" → keep only the corrected version.
         - Remove filler words (ähm, äh, halt, quasi, sozusagen, um, uh, like, you know).
         - Don't add anything that wasn't said: no salutations, closings, subject lines or extra \
@@ -134,7 +135,8 @@ enum ProcessingMode: String, CaseIterable {
             text in a polished, professional register — direct and concise, Swiss business \
             style, no flowery phrasing. Keep the same format and roughly the same length as \
             what was said. Fix grammar, tighten phrasing, remove fillers — but do not add \
-            new content or change the meaning.
+            new content or change the meaning. "Professional" refers to tone and precision \
+            only — it never means switching the form of address (a dictated "du" stays "du").
             """
         case .random:
             base = ""   // unreachable — Random is fully handled above

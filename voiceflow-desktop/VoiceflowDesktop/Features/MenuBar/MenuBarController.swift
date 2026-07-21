@@ -79,11 +79,16 @@ final class MenuBarController {
             onRetryRescue: { [weak self] in
                 self?.closePopover()
                 self?.delegate?.menuBarDidRequestRescueRetry()
+            },
+            onHistory: { [weak self] in
+                self?.closePopover()
+                self?.delegate?.menuBarDidRequestHistory()
             }
         )
 
         let pop = NSPopover()
-        pop.contentSize = NSSize(width: 280, height: 340)
+        // Width must match StatusPanelView's fixed frame (300).
+        pop.contentSize = NSSize(width: 300, height: 340)
         pop.behavior = .transient
         pop.contentViewController = NSHostingController(rootView: panel)
         self.popover = pop
