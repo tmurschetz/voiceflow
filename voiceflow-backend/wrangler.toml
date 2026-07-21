@@ -14,7 +14,7 @@ compatibility_date = "2026-07-01"
 
 [[kv_namespaces]]
 binding = "REGISTRY"
-id = "REPLACE_AFTER_WRANGLER_KV_CREATE"   # wrangler kv namespace create REGISTRY
+id = "acabf998d6e04c40a095550f9ca1fb0d"   # wrangler kv namespace create REGISTRY
 
 [vars]
 # "true" bypasses the real OpenAI Admin API and issues fake sk-test-… keys.
