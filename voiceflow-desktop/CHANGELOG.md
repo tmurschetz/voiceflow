@@ -27,9 +27,11 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
   `gpt-4o-mini-transcribe`). It is noticeably more accurate on names, compounds and
   domain terms — e.g. "Budget-Meeting" was mis-heard as "Birgley-Meeting" by the old
   default. Existing installs are upgraded once, automatically.
-- **Higher recording quality**: dictations are now captured at 24 kHz / 96 kbps AAC
+- **Higher recording quality**: dictations are now captured at 32 kHz / 96 kbps AAC
   (was 16 kHz / 32 kbps — audibly compressed, which cost recognition accuracy).
-  A 30-second dictation is still only ~360 KB.
+  A 30-second dictation is still only ~360 KB. If the encoder ever rejects the
+  preferred settings, recording automatically falls back to the proven 16 kHz
+  profile instead of failing.
 - Every transcription now sends a short **recognition hint** (clean punctuation,
   dates/times) when a language is selected — neutral on auto-detect so language
   detection is never skewed.
