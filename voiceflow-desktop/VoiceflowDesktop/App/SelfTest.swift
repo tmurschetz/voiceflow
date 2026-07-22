@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 
 /// In-app functional test that exercises the REAL production pipeline —
 /// the same TranscriptionService, ModeProcessor, prompts and wrapDictation
@@ -267,6 +268,21 @@ enum SelfTest {
         check("pending → wartend", machine[0])
         check("approved + Key → aktiv, Key installiert", machine[1])
         check("revoked → Key lokal entfernt (Kill-Switch)", machine[2])
+
+        // 15. Recorder settings must be encoder-valid (the v1.1 pre-release bug:
+        // 24 kHz + 96 kbps was outside Apple's allowed AAC range, so recording
+        // never started). prepareToRecord() validates without touching the mic.
+        print("\n[15] Aufnahme-Einstellungen vom Encoder akzeptiert")
+        func recorderPrepares(_ settings: [String: Any], file: String, label: String) {
+            let url = URL(fileURLWithPath: NSTemporaryDirectory() + "selftest-\(file).m4a")
+            let prepared = (try? AVAudioRecorder(url: url, settings: settings))?.prepareToRecord() ?? false
+            try? FileManager.default.removeItem(at: url)
+            check("\(label) gültig", prepared)
+        }
+        recorderPrepares(RecordingService.preferredRecorderSettings,
+                         file: "preferred", label: "Bevorzugt (32 kHz, 96 kbps)")
+        recorderPrepares(RecordingService.fallbackRecorderSettings,
+                         file: "fallback", label: "Rückfall (16 kHz, 32 kbps)")
 
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")

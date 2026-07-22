@@ -124,7 +124,10 @@ build-release: generate
 	  xattr -cr "$$BUNDLE_DST" 2>/dev/null || true; \
 	  echo "   ✓ bundle ready at $$BUNDLE_DST"
 	@# ── Step 3: compile + link the app ───────────────────────────────────────
-	xcodebuild \
+	@# Log to file and HARD-FAIL on build errors — piping through grep used to
+	@# swallow the exit code, so a failed build silently re-shipped the stale
+	@# app from a previous Release build (bit us on 2026-07-22).
+	@xcodebuild \
 		-project $(PROJECT) \
 		-scheme  $(SCHEME)  \
 		-configuration Release \
@@ -134,8 +137,10 @@ build-release: generate
 		CODE_SIGN_STYLE=Manual \
 		PROVISIONING_PROFILE_SPECIFIER="" \
 		CODE_SIGN_ENTITLEMENTS="" \
-		build \
-		| grep -E "(error:|warning: |Build succeeded|BUILD SUCCEEDED|BUILD FAILED)" || true
+		build > "$(BUILD)/xcodebuild-release.log" 2>&1 \
+	  || { grep -E "error:" "$(BUILD)/xcodebuild-release.log" | head -8; \
+	       echo "❌  Release-Build fehlgeschlagen — komplettes Log: $(BUILD)/xcodebuild-release.log"; exit 1; }
+	@grep -E "BUILD SUCCEEDED" "$(BUILD)/xcodebuild-release.log" | head -1
 	@# ── Step 4: copy the assembled .app to our well-known output path ────────
 	@rm -rf "$(APP)"
 	@cp -R "$(BUILD)/DerivedData/Build/Products/Release/$(APP_NAME).app" "$(APP)"
@@ -233,7 +238,13 @@ release: notarize-check
 	@echo "→  Staple das Ticket an die App…"
 	xcrun stapler staple "$(APP)"
 	@$(MAKE) dmg-package
-	@xcrun stapler staple "$(DMG)" || true
+	@# The DMG container gets the full treatment too: sign → notarize → staple.
+	@# (Stapling only works on signed+notarized containers; the app inside is
+	@# already notarized, so this second round is quick.)
+	@echo "→  Signiere + notarisiere das DMG…"
+	codesign --force --sign "$(DEV_ID)" --timestamp "$(DMG)"
+	xcrun notarytool submit "$(DMG)" --keychain-profile "$(NOTARY_PROFILE)" --wait
+	xcrun stapler staple "$(DMG)"
 	@echo ""
 	@echo "✅  Notarisiertes Release fertig: $(DMG)"
 	@echo "    spctl-Check:" && spctl --assess --type open --context context:primary-signature -v "$(DMG)" 2>&1 | sed 's/^/    /' || true

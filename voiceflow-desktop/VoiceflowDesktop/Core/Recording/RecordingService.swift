@@ -118,23 +118,45 @@ final class RecordingService {
 
     // MARK: - Private: AVAudioRecorder path (system default device)
 
+    /// Preferred capture: 32 kHz mono AAC @ 96 kbps — transparent for speech,
+    /// ~720 KB/min. IMPORTANT: Apple's AAC encoder only accepts certain
+    /// sample-rate/bitrate pairs (e.g. 24 kHz mono caps at 64 kbps; 96 kbps
+    /// there makes prepareToRecord() fail and recording never starts — the
+    /// v1.1 pre-release bug). 32 kHz mono allows up to 96 kbps. Sample rate
+    /// must be a Double.
+    static let preferredRecorderSettings: [String: Any] = [
+        AVFormatIDKey:         Int(kAudioFormatMPEG4AAC),
+        AVSampleRateKey:       32_000.0,
+        AVNumberOfChannelsKey: 1,
+        AVEncoderBitRateKey:   96_000
+    ]
+
+    /// Known-good since v1.0 — safety net if the preferred settings are ever
+    /// rejected by the encoder (OS quirks, future hardware).
+    static let fallbackRecorderSettings: [String: Any] = [
+        AVFormatIDKey:         Int(kAudioFormatMPEG4AAC),
+        AVSampleRateKey:       16_000.0,
+        AVNumberOfChannelsKey: 1,
+        AVEncoderBitRateKey:   32_000
+    ]
+
     private func startRecorderRecording(to url: URL) throws {
-        // Capture quality vs upload size: v1.0 recorded 16 kHz mono at 32 kbps —
-        // small and fast, but audibly compressed, and recognition quality tracks
-        // audio quality (names/compounds suffered vs. e.g. ChatGPT's recorder).
-        // 24 kHz mono AAC at 96 kbps is transparent for speech; a 30-second
-        // dictation is ~360 KB, which still uploads in well under a second.
-        let settings: [String: Any] = [
-            AVFormatIDKey:            Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey:          24_000,
-            AVNumberOfChannelsKey:    1,
-            AVEncoderBitRateKey:      96_000,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
-        audioRecorder = try AVAudioRecorder(url: url, settings: settings)
-        guard audioRecorder?.record() == true else {
-            throw RecordingError.couldNotStart
+        // Try preferred quality first; fall back rather than fail — a dictation
+        // app must never be unable to record because of an encoder range check.
+        for (idx, settings) in [Self.preferredRecorderSettings,
+                                Self.fallbackRecorderSettings].enumerated() {
+            guard let recorder = try? AVAudioRecorder(url: url, settings: settings),
+                  recorder.prepareToRecord(),
+                  recorder.record() else {
+                if idx == 0 {
+                    NSLog("[VF-Record] Preferred settings rejected — falling back to 16 kHz/32 kbps")
+                }
+                continue
+            }
+            audioRecorder = recorder
+            return
         }
+        throw RecordingError.couldNotStart
     }
 
     // MARK: - Private: AVAudioEngine path (specific device)
