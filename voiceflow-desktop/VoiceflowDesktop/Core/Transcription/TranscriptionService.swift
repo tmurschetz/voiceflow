@@ -79,6 +79,19 @@ final class TranscriptionService {
 
         let prompt = Self.recognitionPrompt(for: language, vocabulary: vocabulary)
 
+        // Long-recording support (up to ~30 min): the upload size guard catches
+        // files beyond the API's 25 MB cap, and recordings longer than
+        // gpt-4o-transcribe's 25-minute duration limit are routed to whisper-1
+        // (no duration cap) instead of failing with an opaque 400.
+        let audioSeconds = Int(Self.audioDuration(url: audio.fileURL) ?? 0)
+        if audioData.count > Self.maxUploadBytes {
+            throw TranscriptionError.tooLong
+        }
+        let effectiveModel = Self.effectiveModel(requested: model, audioSeconds: audioSeconds)
+        if effectiveModel != model {
+            NSLog("[VF-Transcribe] %ds audio exceeds %@'s limit — using whisper-1", audioSeconds, model)
+        }
+
         var lastError: Error = OpenAIError.invalidResponse
         for attempt in 1...Self.maxAttempts {
             do {
@@ -86,9 +99,10 @@ final class TranscriptionService {
                     audioData: audioData,
                     fileExt: fileExt,
                     languageCode: languageCode,
-                    model: model,
+                    model: effectiveModel,
                     apiKey: apiKey,
-                    prompt: prompt
+                    prompt: prompt,
+                    audioSeconds: audioSeconds
                 )
                 guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     throw TranscriptionError.emptyTranscript
@@ -114,6 +128,29 @@ final class TranscriptionService {
             }
         }
         throw lastError
+    }
+
+    /// OpenAI's transcription upload cap is 25 MB — leave headroom. At the
+    /// app's 96 kbps capture this is ~34 minutes of audio.
+    static let maxUploadBytes = 24_500_000
+
+    /// gpt-4o-transcribe models reject audio longer than 25 minutes (1500 s).
+    /// Above this (with margin) we transparently use whisper-1, which has no
+    /// duration cap — the user asked for reliable dictation up to ~30 minutes.
+    static let gpt4oDurationCapSeconds = 1_380   // 23 min, safety margin
+
+    static func effectiveModel(requested: String, audioSeconds: Int) -> String {
+        if requested.hasPrefix("gpt-4o") && audioSeconds > gpt4oDurationCapSeconds {
+            return "whisper-1"
+        }
+        return requested
+    }
+
+    /// Decoded duration in seconds, or nil if unreadable.
+    static func audioDuration(url: URL) -> TimeInterval? {
+        guard let file = try? AVAudioFile(forReading: url),
+              file.fileFormat.sampleRate > 0 else { return nil }
+        return Double(file.length) / file.fileFormat.sampleRate
     }
 
     /// True when the recording contains essentially no audio. An empty AAC/m4a
@@ -176,6 +213,8 @@ enum TranscriptionError: LocalizedError, Equatable {
     case emptyTranscript
     /// The recording had no audio (e.g. accidental double-press). Not retryable.
     case noSpeech
+    /// The file exceeds the API upload cap (~34 min at current quality).
+    case tooLong
 
     var errorDescription: String? {
         switch self {
@@ -183,6 +222,8 @@ enum TranscriptionError: LocalizedError, Equatable {
             return "Keine Sprache erkannt. Bitte erneut versuchen."
         case .noSpeech:
             return "Keine Sprache aufgenommen. Shortcut drücken, sprechen, dann nochmals drücken."
+        case .tooLong:
+            return "Die Aufnahme ist zu lang für eine Übertragung (max. ~30 Minuten). Bitte in kürzeren Abschnitten diktieren."
         }
     }
 }

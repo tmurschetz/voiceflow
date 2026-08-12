@@ -20,6 +20,36 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.1.1] — 2026-08-12
+
+### Fixed — long dictations (10, 20, 30 minutes) failed with "request timed out"
+- The network layer had a **hard 40-second ceiling per request** (a speed
+  optimisation for short dictations): uploading + transcribing a 20-minute
+  recording takes minutes, so every long dictation died with *"The request
+  timed out"* and landed in the rescue store. Timeouts now **scale with audio
+  length** (up to 10 min stall / 15 min total), and the rewrite step's timeout
+  scales with text length (its fixed 20 s also cut off long cleanups).
+- **Model routing**: `gpt-4o-transcribe` rejects audio over 25 minutes — longer
+  recordings now transparently use `whisper-1` (no duration cap). Duration
+  errors from the API also trigger the fallback, belt-and-braces.
+- **Upload guard**: recordings beyond the API's 25 MB cap (~34 min) get a clear
+  German error instead of an opaque 400.
+
+### Improved — fidelity on long texts
+- Cleanups of long dictations (>4000 chars) run on full **gpt-4o** (mini tends
+  to drift/compress on thousands of words).
+- **Anti-truncation guard**: if a faithful-edit cleanup returns under ~55 % of
+  the input on a long dictation, the raw transcript is used instead — nothing
+  you said is ever silently swallowed. (Instructed Random stays exempt:
+  translations/summaries may legitimately shorten.)
+
+### Tests
+- Selftest [16] (10 new checks): timeout scaling, duration routing, fallback
+  trigger, truncation guard. Selftest [1] now scales its response-time budget
+  with audio length; verified end-to-end with real 12- and 26-minute recordings.
+
+---
+
 ## [1.1.0] — 2026-07-21
 
 ### Better transcription quality
