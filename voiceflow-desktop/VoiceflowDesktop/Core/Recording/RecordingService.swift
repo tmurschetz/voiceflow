@@ -72,11 +72,22 @@ final class RecordingService {
             tempFileURL = url
             try startEngineRecording(deviceID: coreAudioDeviceID, to: url)
         } else {
-            // System default — use AVAudioRecorder (AAC/M4A output)
+            // System default: voice-processed capture first (Apple's noise
+            // suppression + echo cancellation + auto gain — the same class of
+            // pre-processing ChatGPT & Co. apply before transcription). If the
+            // voice-processing engine fails for any reason, fall back to the
+            // proven plain AVAudioRecorder path — recording must never die.
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("vf_\(UUID().uuidString).m4a")
             tempFileURL = url
-            try startRecorderRecording(to: url)
+            do {
+                try startVoiceProcessedRecording(to: url)
+                NSLog("[VF-Record] Voice-processed capture active")
+            } catch {
+                NSLog("[VF-Record] Voice processing unavailable (%@) — plain recorder",
+                      String(describing: error))
+                try startRecorderRecording(to: url)
+            }
         }
 
         recordingStartedAt = Date()
@@ -157,6 +168,52 @@ final class RecordingService {
             return
         }
         throw RecordingError.couldNotStart
+    }
+
+    // MARK: - Private: voice-processed path (system default device)
+
+    /// AAC bitrates are only valid in certain ranges per sample rate (see the
+    /// preferred/fallback settings above) — the voice-processing unit dictates
+    /// the rate, so the bitrate adapts to it.
+    static func vpBitrate(forSampleRate rate: Double) -> Int {
+        if rate >= 32_000 { return 96_000 }
+        if rate >= 22_050 { return 64_000 }
+        return 48_000
+    }
+
+    /// Captures through Apple's voice-processing unit: noise suppression, echo
+    /// cancellation and automatic gain control — the input is levelled and
+    /// cleaned before it ever reaches the encoder, which is a large part of why
+    /// ChatGPT-style recorders "understand" better in real rooms.
+    private func startVoiceProcessedRecording(to url: URL) throws {
+        let engine    = AVAudioEngine()
+        let inputNode = engine.inputNode
+        try inputNode.setVoiceProcessingEnabled(true)
+
+        let format = inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw RecordingError.couldNotStart
+        }
+
+        let settings: [String: Any] = [
+            AVFormatIDKey:         Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey:       format.sampleRate,
+            AVNumberOfChannelsKey: Int(format.channelCount),
+            AVEncoderBitRateKey:   Self.vpBitrate(forSampleRate: format.sampleRate)
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings,
+                                   commonFormat: format.commonFormat,
+                                   interleaved: format.isInterleaved)
+        audioFile = file
+
+        inputNode.installTap(onBus: 0, bufferSize: 4_096, format: format) { [weak file] buffer, _ in
+            guard let f = file else { return }
+            try? f.write(from: buffer)
+        }
+
+        engine.prepare()
+        try engine.start()
+        audioEngine = engine
     }
 
     // MARK: - Private: AVAudioEngine path (specific device)

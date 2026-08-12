@@ -67,9 +67,10 @@ enum ProcessingMode: String, CaseIterable {
     ///     so creative instructions ("add emojis and swear words", "translate to
     ///     English", "write in Zürich dialect") aren't fought by opinionated
     ///     defaults like the Swiss-German language default or "don't add anything".
-    func systemPrompt(userInstruction: String) -> String {
+    func systemPrompt(userInstruction: String, vocabulary: String = "") -> String {
         let instruction = userInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasInstruction = !instruction.isEmpty
+        let vocab = String(vocabulary.trimmingCharacters(in: .whitespacesAndNewlines).prefix(480))
 
         // (1) the dictation is content to transform, never a message to answer;
         // (2) output only the result. These never change.
@@ -87,7 +88,7 @@ enum ProcessingMode: String, CaseIterable {
         if self == .random {
             guard hasInstruction else {
                 // Empty instruction → behave like Privat.
-                return ProcessingMode.private.systemPrompt(userInstruction: "")
+                return ProcessingMode.private.systemPrompt(userInstruction: "", vocabulary: vocabulary)
             }
             return """
             You are a text transformer for a dictation tool. Transform the dictated text strictly \
@@ -104,6 +105,14 @@ enum ProcessingMode: String, CaseIterable {
         }
 
         // Default style for Privat / Business — applied where the instruction is silent.
+        let vocabBlock = vocab.isEmpty ? "" : """
+
+        - The speaker's known names and terms: \(vocab). Speech recognition often garbles \
+        exactly these words — when a transcript word is phonetically close to one of them \
+        (similar sound, similar length), it IS that term: replace it with the exact spelling \
+        listed here. This rule overrides letter-fidelity (it fixes the recogniser's error, \
+        it does not change what the speaker said).
+        """
         let defaults = """
         Default style — apply each item ONLY where the user's custom instruction does not say otherwise:
         - Output language follows the input: German or Swiss-German speech → Swiss Standard \
@@ -113,11 +122,17 @@ enum ProcessingMode: String, CaseIterable {
         - Form of address: NEVER change it. du/dich/dir stays Du-form, Sie/Ihnen stays Sie-form. \
         If the dictation contains no form of address, do NOT introduce one — keep the phrasing \
         neutral. Never "upgrade" du to Sie for politeness or professionalism.
+        - Fix likely mishearings: when a word is implausible in context (a nonsense compound, a \
+        garbled name, a word that breaks the sentence), replace it with what the speaker plausibly \
+        said. Intended meaning beats letter-fidelity to the transcript.
         - Apply self-corrections: "am Montag — nein, am Dienstag" → keep only the corrected version.
         - Remove filler words (ähm, äh, halt, quasi, sozusagen, um, uh, like, you know).
+        - COMPLETENESS IS SACRED: keep every content word, qualifier and nuance ("weiterhin", \
+        "eigentlich", "fast", "vielleicht"). Never drop information, never summarise, never swap \
+        a word for a synonym the speaker didn't say.
         - Don't add anything that wasn't said: no salutations, closings, subject lines or extra \
         sentences.
-        - Format numbers, dates, e-mail addresses and URLs properly.
+        - Format numbers, dates, e-mail addresses and URLs properly.\(vocabBlock)
         """
 
         let base: String
@@ -125,9 +140,11 @@ enum ProcessingMode: String, CaseIterable {
         case .private:
             base = """
             You are a transcription editor for a dictation tool. Lightly clean up the dictated \
-            text: fix punctuation, capitalisation and obvious transcription errors, apply \
-            self-corrections, remove fillers. Do NOT rewrite, restructure or change the \
-            meaning, vocabulary or tone of what was said.
+            text: fix punctuation and capitalisation, correct likely mishearings using context, \
+            apply self-corrections, remove fillers. Everything else stays EXACTLY as spoken: \
+            do NOT rewrite, restructure, shorten or paraphrase, and never replace the speaker's \
+            words with synonyms — your output should read as what the speaker said, cleaned, \
+            not as your version of it.
             """
         case .business:
             base = """
@@ -215,6 +232,7 @@ final class ModeProcessor {
         mode: ProcessingMode,
         userInstruction: String,
         textModel: String,
+        vocabulary: String = "",
         onRetry: (@MainActor @Sendable (RetryEvent) async -> Void)? = nil
     ) async throws -> Result {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -224,7 +242,7 @@ final class ModeProcessor {
             throw OpenAIError.missingAPIKey
         }
 
-        let systemPrompt = mode.systemPrompt(userInstruction: userInstruction)
+        let systemPrompt = mode.systemPrompt(userInstruction: userInstruction, vocabulary: vocabulary)
         // Wrap the dictation in delimiters so the model treats it as data to
         // rewrite, never as a message to answer (see ProcessingMode.wrapDictation).
         let wrappedText = ProcessingMode.wrapDictation(text)

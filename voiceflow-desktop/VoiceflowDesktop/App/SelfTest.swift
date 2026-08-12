@@ -338,6 +338,43 @@ enum SelfTest {
               !ModeProcessor.looksTruncated(raw: longRaw, polished: "short",
                                             mode: .random, instruction: "Fasse zusammen"))
 
+        // 17. Faithful cleanup (v1.1.2): gpt-4o default, qualifiers survive,
+        // mishearings get fixed via context + dictionary, and the
+        // voice-processing bitrates are encoder-valid for every plausible rate.
+        print("\n[17] Treue-Politur & Sprachverarbeitung (v1.1.2)")
+        check("Standard-Textmodell = gpt-4o", TextModel.recommended.id == "gpt-4o",
+              detail: "ist \(TextModel.recommended.id)")
+
+        if let out = await process(processor, "ich bin weiterhin eigentlich fast zufrieden mit dem stand vom projekt",
+                                   mode: .private, instruction: "", textModel: textModel) {
+            let low = out.lowercased()
+            check("Qualifizierer überleben (weiterhin/eigentlich/fast)",
+                  low.contains("weiterhin") && low.contains("eigentlich") && low.contains("fast"),
+                  detail: "Output: \(out)")
+        }
+
+        if let out = await process(processor, "das protokoll geht an thomas mörschetz und das birgley meeting ist morgen",
+                                   mode: .private, instruction: "", textModel: textModel,
+                                   vocabulary: "Murschetz, Budget-Meeting, Voiceflow") {
+            check("Verhörer via Wörterbuch korrigiert (Mörschetz → Murschetz)",
+                  out.contains("Murschetz"), detail: "Output: \(out)")
+        }
+
+        var vpAllValid = true
+        for rate in [48_000.0, 44_100.0, 32_000.0, 24_000.0, 16_000.0] {
+            let s: [String: Any] = [
+                AVFormatIDKey:         Int(kAudioFormatMPEG4AAC),
+                AVSampleRateKey:       rate,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey:   RecordingService.vpBitrate(forSampleRate: rate)
+            ]
+            let url = URL(fileURLWithPath: NSTemporaryDirectory() + "selftest-vp-\(Int(rate)).m4a")
+            let ok = (try? AVAudioRecorder(url: url, settings: s))?.prepareToRecord() ?? false
+            try? FileManager.default.removeItem(at: url)
+            if !ok { vpAllValid = false }
+        }
+        check("VP-Bitraten für alle Sample-Raten encoder-gültig", vpAllValid)
+
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")
         return failed == 0
@@ -345,10 +382,12 @@ enum SelfTest {
 
     /// Runs one ModeProcessor pass and prints the output; returns the text or nil on error.
     private static func process(_ processor: ModeProcessor, _ input: String,
-                                mode: ProcessingMode, instruction: String, textModel: String) async -> String? {
+                                mode: ProcessingMode, instruction: String, textModel: String,
+                                vocabulary: String = "") async -> String? {
         do {
             let r = try await processor.process(text: input, mode: mode,
-                                                userInstruction: instruction, textModel: textModel)
+                                                userInstruction: instruction, textModel: textModel,
+                                                vocabulary: vocabulary)
             print("  in : \"\(input)\"")
             print("  out: \"\(r.text)\"")
             if r.usedFallback { print("  ⚠️  Fallback auf Rohtext (KI nicht erreichbar)") }

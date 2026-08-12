@@ -20,6 +20,30 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [1.1.2] — 2026-08-12
+
+### The quality-parity release ("wie ChatGPT")
+Diagnosed from real history data: the raw transcription was good — the
+**cleanup was degrading it** (the mini model dropped qualifiers like
+"weiterhin" and swapped words for synonyms), and the capture fed the model an
+unprocessed mic signal.
+
+- **Faithful cleanup on gpt-4o (new default, one-time migration):** strict
+  rules — every content word, qualifier and nuance survives; no synonym swaps;
+  no summarising. At the same time the cleanup now **actively fixes likely
+  mishearings** from context and knows your **dictionary** (Eigene Begriffe),
+  so garbled names get corrected after transcription too.
+- **Voice-processed capture:** recording now runs through Apple's voice
+  processing — noise suppression, echo cancellation and automatic gain — the
+  same class of pre-processing ChatGPT-style recorders apply. Falls back to the
+  proven plain recorder automatically if unavailable.
+
+### Tests
+- Selftest [17]: qualifier survival, dictionary-driven mishearing correction,
+  encoder-valid voice-processing bitrates for all plausible sample rates.
+
+---
+
 ## [1.1.1] — 2026-08-12
 
 ### Fixed — long dictations (10, 20, 30 minutes) failed with "request timed out"
