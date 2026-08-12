@@ -189,6 +189,25 @@ final class ModeProcessor {
     /// outage, which the raw-transcript fallback already covers.)
     private static let retryDelaySeconds = 2
 
+    /// Above this input size the cleanup runs on full gpt-4o instead of mini.
+    static let longTextThresholdChars = 4_000
+
+    static func effectiveTextModel(requested: String, inputChars: Int) -> String {
+        (requested == "gpt-4o-mini" && inputChars > longTextThresholdChars) ? "gpt-4o" : requested
+    }
+
+    /// Cleanup legitimately removes fillers (10–25 %), but must never swallow
+    /// content. On long, faithful-edit tasks an output under ~55 % of the input
+    /// signals summarisation/truncation. Instructed Random is exempt — the
+    /// instruction may legitimately condense or translate.
+    static func looksTruncated(raw: String, polished: String,
+                               mode: ProcessingMode, instruction: String) -> Bool {
+        let faithful = mode != .random
+            || instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard faithful, raw.count > 2_000 else { return false }
+        return polished.count < Int(Double(raw.count) * 0.55)
+    }
+
     // MARK: - Process
 
     func process(
@@ -210,6 +229,11 @@ final class ModeProcessor {
         // rewrite, never as a message to answer (see ProcessingMode.wrapDictation).
         let wrappedText = ProcessingMode.wrapDictation(text)
 
+        // Long dictations (10+ minutes ≈ >4000 chars): the full gpt-4o is
+        // steadier than mini at faithfully reproducing thousands of words —
+        // mini tends to drift or compress on very long edits.
+        let effectiveTextModel = Self.effectiveTextModel(requested: textModel, inputChars: text.count)
+
         // Predicted Outputs speed up editing tasks where output ≈ input
         // (Privat/Business). Random with a custom instruction can transform the
         // text arbitrarily (translate, restructure) — prediction would be
@@ -223,11 +247,21 @@ final class ModeProcessor {
                 let polished = try await client.chat(
                     systemPrompt: systemPrompt,
                     userText: wrappedText,
-                    model: textModel,
+                    model: effectiveTextModel,
                     apiKey: apiKey,
                     predictOutput: predictOutput,
                     predictionText: text
                 )
+                // Guard against silent content loss: cleanup may drop fillers,
+                // but a drastically shorter output on a long dictation means
+                // the model summarised/truncated — the raw transcript is the
+                // safer result then (nothing said is ever lost).
+                if Self.looksTruncated(raw: text, polished: polished,
+                                       mode: mode, instruction: userInstruction) {
+                    NSLog("[ModeProcessor] Output suspiciously short (%d → %d chars) — returning raw transcript",
+                          text.count, polished.count)
+                    return Result(text: text, usedFallback: true)
+                }
                 return Result(text: polished, usedFallback: false)
 
             } catch {

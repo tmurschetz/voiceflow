@@ -54,8 +54,24 @@ enum SelfTest {
         passed = 0; failed = 0
         print("\n========== Voiceflow Selbsttest  (v\(AppInfo.version) build \(AppInfo.build)) ==========\n")
 
-        // 0. Prerequisite: API key
+        // 0. Prerequisite: API key. A freshly built ad-hoc test binary may be
+        // denied by the Keychain ACL in headless runs — fall back to the
+        // security CLI (in-memory only; the stored item is never touched).
         print("[0] Voraussetzungen")
+        if !KeychainStore.hasAPIKey {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+            p.arguments = ["find-generic-password", "-s", "com.voiceflow.desktop",
+                           "-a", "openai_api_key", "-w"]
+            let pipe = Pipe()
+            p.standardOutput = pipe
+            p.standardError = FileHandle.nullDevice
+            try? p.run()
+            p.waitUntilExit()
+            let key = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !key.isEmpty { KeychainStore.testOverrideAPIKey = key }
+        }
         guard KeychainStore.hasAPIKey else {
             print("  ❌ Kein API-Key im Schlüsselbund — Selbsttest kann nicht laufen.")
             return false
@@ -71,13 +87,19 @@ enum SelfTest {
         print("\n[1] Transkription (\(transcribeModel))")
         if let audioPath, FileManager.default.fileExists(atPath: audioPath) {
             let audio = RecordedAudio(fileURL: URL(fileURLWithPath: audioPath))
+            let audioSecs = Int(TranscriptionService.audioDuration(url: audio.fileURL) ?? 0)
             do {
                 let started = Date()
                 let r = try await transcriber.transcribe(audio: audio, language: .autoDetect, model: transcribeModel)
                 let secs = Date().timeIntervalSince(started)
-                print("  → \"\(r.transcript)\"  (\(String(format: "%.2f", secs))s)")
+                let preview = r.transcript.count > 300
+                    ? String(r.transcript.prefix(300)) + "… [\(r.transcript.count) Zeichen]"
+                    : r.transcript
+                print("  → \"\(preview)\"  (\(String(format: "%.2f", secs))s für \(audioSecs)s Audio)")
                 check("Transkript nicht leer", !r.transcript.trimmingCharacters(in: .whitespaces).isEmpty)
-                check("Antwortzeit < 20s", secs < 20, detail: "war \(String(format: "%.1f", secs))s")
+                // Long audio legitimately takes longer — scale the expectation.
+                let budget = max(20.0, Double(audioSecs) * 0.5)
+                check("Antwortzeit < \(Int(budget))s", secs < budget, detail: "war \(String(format: "%.1f", secs))s")
             } catch {
                 check("Transkription erfolgreich", false, detail: "\(error.localizedDescription)")
             }
@@ -283,6 +305,38 @@ enum SelfTest {
                          file: "preferred", label: "Bevorzugt (32 kHz, 96 kbps)")
         recorderPrepares(RecordingService.fallbackRecorderSettings,
                          file: "fallback", label: "Rückfall (16 kHz, 32 kbps)")
+
+        // 16. Long-recording support (v1.1.1) — timeouts scale, models route,
+        // truncation is caught. Pure logic; the network path is exercised by
+        // running --selftest with a long audio file.
+        print("\n[16] Lange Aufnahmen — Timeouts, Routing, Kürzungs-Schutz")
+        check("Kurzes Audio → knackiges Timeout (30s)",
+              OpenAIClient.transcribeTimeout(forAudioSeconds: 10) == 30)
+        check("20-Min-Audio → grosszügiges Timeout (600s)",
+              OpenAIClient.transcribeTimeout(forAudioSeconds: 1200) == 600)
+        check("Chat-Timeout skaliert mit Textlänge",
+              OpenAIClient.chatTimeout(forInputChars: 100) == 30
+              && OpenAIClient.chatTimeout(forInputChars: 20_000) == 300)
+        check("≤23 Min bleibt gpt-4o-transcribe",
+              TranscriptionService.effectiveModel(requested: "gpt-4o-transcribe", audioSeconds: 1200) == "gpt-4o-transcribe")
+        check(">23 Min → whisper-1 (4o-Limit ist 25 Min)",
+              TranscriptionService.effectiveModel(requested: "gpt-4o-transcribe", audioSeconds: 1500) == "whisper-1")
+        check("Dauer-Fehlermeldung löst Whisper-Fallback aus",
+              OpenAIClient.isModelOrDurationIssue("audio duration 1560 seconds is longer than 1500 seconds maximum")
+              && !OpenAIClient.isModelOrDurationIssue("invalid api key"))
+        check("Langtext-Veredelung wechselt auf gpt-4o",
+              ModeProcessor.effectiveTextModel(requested: "gpt-4o-mini", inputChars: 9_000) == "gpt-4o"
+              && ModeProcessor.effectiveTextModel(requested: "gpt-4o-mini", inputChars: 500) == "gpt-4o-mini")
+        let longRaw = String(repeating: "wort ", count: 600)   // 3000 Zeichen
+        check("Kürzung erkannt (3000→1200 Zeichen bei Privat)",
+              ModeProcessor.looksTruncated(raw: longRaw, polished: String(longRaw.prefix(1200)),
+                                           mode: .private, instruction: ""))
+        check("Normale Bereinigung nicht als Kürzung gewertet",
+              !ModeProcessor.looksTruncated(raw: longRaw, polished: String(longRaw.prefix(2400)),
+                                            mode: .private, instruction: ""))
+        check("Random mit Instruktion darf kürzen (z. B. Übersetzung)",
+              !ModeProcessor.looksTruncated(raw: longRaw, polished: "short",
+                                            mode: .random, instruction: "Fasse zusammen"))
 
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")

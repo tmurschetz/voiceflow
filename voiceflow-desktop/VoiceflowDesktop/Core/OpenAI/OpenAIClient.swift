@@ -23,10 +23,32 @@ final class OpenAIClient {
     /// and let the retry layer reconnect, instead of hanging up to 45–120 s.
     static let requestTimeout: TimeInterval = 20
 
+    /// Stall timeout for a transcription request, scaled with audio length:
+    /// after the upload finishes, the server sends NOTHING until the whole file
+    /// is transcribed — a 20-minute recording legitimately needs minutes of
+    /// silent waiting. (The old fixed 20 s/40 s limits killed every long
+    /// dictation with "The request timed out".) Short dictations keep snappy
+    /// stall detection.
+    static func transcribeTimeout(forAudioSeconds seconds: Int) -> TimeInterval {
+        min(600, max(30, Double(seconds)))
+    }
+
+    /// Stall timeout for a chat (rewrite) request, scaled with input size:
+    /// the response arrives in one piece only after the full text is generated —
+    /// a 3000-word cleanup takes well over the old 20 s.
+    static func chatTimeout(forInputChars chars: Int) -> TimeInterval {
+        min(300, max(30, Double(chars) / 40))
+    }
+
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = requestTimeout   // stall detection (resets per packet)
-        config.timeoutIntervalForResource = 40              // hard ceiling per attempt
+        // Hard per-attempt ceiling. Must accommodate long dictations: 30 min of
+        // audio ≈ 22 MB upload + minutes of server-side transcription. The old
+        // value of 40 s made every recording beyond a few minutes fail. Stall
+        // detection above (and per-request overrides) still catches dead
+        // connections quickly for short requests.
+        config.timeoutIntervalForResource = 900
         config.waitsForConnectivity = false                 // fail immediately when offline; don't hang
         // TLS 1.2+ only (1.3 is negotiated automatically when available).
         config.tlsMinimumSupportedProtocolVersion = .TLSv12
@@ -72,21 +94,36 @@ final class OpenAIClient {
     /// error), falls back to whisper-1 for this call — without overriding the
     /// user's choice in Settings.
     func transcribe(audioData: Data, fileExt: String, languageCode: String?,
-                    model: String, apiKey: String, prompt: String? = nil) async throws -> Transcription {
+                    model: String, apiKey: String, prompt: String? = nil,
+                    audioSeconds: Int = 0) async throws -> Transcription {
         do {
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
-                                            languageCode: languageCode, model: model, apiKey: apiKey, prompt: prompt)
+                                            languageCode: languageCode, model: model, apiKey: apiKey,
+                                            prompt: prompt, audioSeconds: audioSeconds)
         } catch let OpenAIError.httpError(code, message) where model != "whisper-1"
                     && (code == 400 || code == 403 || code == 404)
-                    && message.lowercased().contains("model") {
-            NSLog("[OpenAIClient] %@ unavailable (%d) — falling back to whisper-1 for this call", model, code)
+                    && Self.isModelOrDurationIssue(message) {
+            // Account lacks the model, OR the audio exceeds the model's duration
+            // cap (gpt-4o-transcribe: 25 min) — whisper-1 has no duration cap.
+            NSLog("[OpenAIClient] %@ rejected (%d: %@) — falling back to whisper-1 for this call",
+                  model, code, String(message.prefix(80)))
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
-                                            languageCode: languageCode, model: "whisper-1", apiKey: apiKey, prompt: prompt)
+                                            languageCode: languageCode, model: "whisper-1", apiKey: apiKey,
+                                            prompt: prompt, audioSeconds: audioSeconds)
         }
     }
 
+    /// True for 4xx messages worth retrying on whisper-1: unknown/unavailable
+    /// model, or audio longer than the model's duration limit.
+    static func isModelOrDurationIssue(_ message: String) -> Bool {
+        let m = message.lowercased()
+        return m.contains("model") || m.contains("duration") || m.contains("too long")
+            || m.contains("longer than") || m.contains("maximum") || m.contains("1500")
+    }
+
     private func transcribeOnce(audioData: Data, fileExt: String, languageCode: String?,
-                                model: String, apiKey: String, prompt: String? = nil) async throws -> Transcription {
+                                model: String, apiKey: String, prompt: String? = nil,
+                                audioSeconds: Int = 0) async throws -> Transcription {
         let boundary = "VF-\(UUID().uuidString)"
         let mimeType = fileExt == "m4a" ? "audio/m4a" : "audio/x-caf"
 
@@ -111,7 +148,7 @@ final class OpenAIClient {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
-        req.timeoutInterval = Self.requestTimeout
+        req.timeoutInterval = Self.transcribeTimeout(forAudioSeconds: audioSeconds)
 
         let started = Date()
         let (data, response) = try await session.data(for: req)
@@ -179,7 +216,9 @@ final class OpenAIClient {
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONEncoder().encode(body)
-        req.timeoutInterval = Self.requestTimeout
+        // Long dictations produce long single-shot responses — scale the stall
+        // timeout with input size (the old fixed 20 s cut off long cleanups).
+        req.timeoutInterval = Self.chatTimeout(forInputChars: userText.count)
 
         let started = Date()
         let (data, response) = try await session.data(for: req)

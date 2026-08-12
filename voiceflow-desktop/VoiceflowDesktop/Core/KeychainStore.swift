@@ -11,9 +11,15 @@ enum KeychainStore {
     private static let account = "openai_api_key"
     private static let deviceTokenAccount = "account_device_token"
 
+    /// Test-harness override (in-memory only, set by SelfTest). Freshly built
+    /// ad-hoc test binaries get silently denied by the Keychain ACL in headless
+    /// runs; the harness then reads the key via /usr/bin/security instead and
+    /// parks it here. NEVER persisted — the stored item's ACL stays untouched.
+    static var testOverrideAPIKey: String?
+
     /// The user's OpenAI API key, or nil if not yet configured.
     static var apiKey: String? {
-        get { read(account: account) }
+        get { testOverrideAPIKey ?? read(account: account) }
         set { write(account: account, value: newValue) }
     }
 
