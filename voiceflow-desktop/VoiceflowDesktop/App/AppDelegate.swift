@@ -67,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // One-time: upgrade users still on the old, less accurate default model.
         settingsService.migrateTranscribeModelIfNeeded()
+        settingsService.migrateTextModelIfNeeded()
 
         // Load local settings + bind shortcuts immediately — no network needed.
         let settings = settingsService.loadSettings()
@@ -189,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     mode: mode,
                     userInstruction: settings?.instruction(for: mode) ?? "",
                     textModel: settings?.textModel ?? TextModel.recommended.id,
+                    vocabulary: settings?.customVocabulary ?? "",
                     onRetry: { [weak self] event in
                         self?.showRetryEvent(event)
                     }
@@ -316,6 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 mode: rescued.mode,
                 userInstruction: settings?.instruction(for: rescued.mode) ?? "",
                 textModel: settings?.textModel ?? TextModel.recommended.id,
+                vocabulary: settings?.customVocabulary ?? "",
                 onRetry: { [weak self] event in self?.showRetryEvent(event) }
             )
 

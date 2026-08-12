@@ -48,6 +48,22 @@ final class SettingsService: ObservableObject {
         NSLog("[VF-Settings] Migrated transcription model: gpt-4o-mini-transcribe → gpt-4o-transcribe")
     }
 
+    /// One-time upgrade of the rewrite model (1.1.2): mini's cleanup measurably
+    /// degraded dictations (dropped qualifiers, swapped synonyms) — gpt-4o is
+    /// the new default for faithful cleanup. Same pattern as above: users still
+    /// on the old default are lifted once, deliberate choices stay untouched.
+    func migrateTextModelIfNeeded() {
+        let flag = "com.voiceflow.desktop.textModelMigrated_v1"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        UserDefaults.standard.set(true, forKey: flag)
+
+        var settings = loadSettings()
+        guard settings.textModel == "gpt-4o-mini" else { return }
+        settings.textModel = "gpt-4o"
+        try? saveSettings(settings)
+        NSLog("[VF-Settings] Migrated text model: gpt-4o-mini → gpt-4o")
+    }
+
     // MARK: - Save
 
     /// Persists settings locally. Validates shortcut uniqueness first.

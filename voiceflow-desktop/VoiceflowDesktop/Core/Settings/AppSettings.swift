@@ -156,18 +156,18 @@ struct TextModel: Identifiable, Equatable {
 
     static let all: [TextModel] = [
         TextModel(
-            id: "gpt-4o-mini",
-            name: "GPT-4o mini — empfohlen",
-            guidance: "Sehr schnell und sehr günstig — für Diktat-Bereinigung mehr als ausreichend."
+            id: "gpt-4o",
+            name: "GPT-4o — empfohlen",
+            guidance: "Höchste Texttreue: verschluckt keine Wörter und tauscht keine Begriffe aus. Der Standard seit 1.1.2."
         ),
         TextModel(
-            id: "gpt-4o",
-            name: "GPT-4o — beste Schreibqualität",
-            guidance: "Feineres Sprachgefühl für anspruchsvolle Business-Texte. Spürbar teurer und etwas langsamer — für kurze Diktate selten nötig."
+            id: "gpt-4o-mini",
+            name: "GPT-4o mini — am günstigsten",
+            guidance: "Sehr schnell und günstig, neigt aber bei der Bereinigung zu kleinen Umformulierungen."
         )
     ]
 
-    static let recommended = all[0]
+    static let recommended = all[0]   // gpt-4o
 
     static func byID(_ id: String) -> TextModel {
         all.first { $0.id == id } ?? recommended

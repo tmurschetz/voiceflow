@@ -17,8 +17,8 @@ packages:
 settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: com.voiceflow.desktop
-    MARKETING_VERSION: "1.1.1"
-    CURRENT_PROJECT_VERSION: "20"
+    MARKETING_VERSION: "1.1.2"
+    CURRENT_PROJECT_VERSION: "21"
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
     CODE_SIGN_STYLE: Automatic
