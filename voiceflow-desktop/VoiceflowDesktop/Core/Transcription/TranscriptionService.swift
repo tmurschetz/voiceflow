@@ -107,6 +107,13 @@ final class TranscriptionService {
                 guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     throw TranscriptionError.emptyTranscript
                 }
+                // Silent/near-silent audio makes the recogniser hallucinate its
+                // own prompt — i.e. the user's dictionary gets "transcribed" and
+                // pasted. Catch prompt echoes and junk before they reach output.
+                if Self.looksLikePromptEcho(transcript: result.text, vocabulary: vocabulary) {
+                    NSLog("[VF-Transcribe] Transcript is a prompt echo/junk — treating as no speech")
+                    throw TranscriptionError.noSpeech
+                }
                 return TranscriptionResult(transcript: result.text, usedLocale: usedLocale)
 
             } catch {
@@ -151,6 +158,37 @@ final class TranscriptionService {
         guard let file = try? AVAudioFile(forReading: url),
               file.fileFormat.sampleRate > 0 else { return nil }
         return Double(file.length) / file.fileFormat.sampleRate
+    }
+
+    /// Detects transcripts that are NOT speech but an artefact of silent audio:
+    /// the recogniser, fed silence plus our recognition prompt, tends to
+    /// "transcribe" the prompt itself — i.e. the user's dictionary list — or
+    /// emit short junk like "context:". Real dictations contain verbs/fillers
+    /// beyond the dictionary, so they never trip this.
+    static func looksLikePromptEcho(transcript: String, vocabulary: String) -> Bool {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Known junk emissions on silent audio.
+        let lowered = trimmed.lowercased()
+        if lowered == "context:" || lowered == "kontext:" { return true }
+        // A lone word ending in a colon is not a dictation.
+        let words = trimmed.split(whereSeparator: { $0.isWhitespace })
+        if words.count == 1 && trimmed.hasSuffix(":") { return true }
+
+        // Echo of the dictionary: almost every transcript token appears in the
+        // vocabulary and the transcript is no longer than the vocabulary itself.
+        func tokens(_ s: String) -> [String] {
+            s.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count > 1 }
+        }
+        let vocabTokens = Set(tokens(vocabulary))
+        guard !vocabTokens.isEmpty else { return false }
+        let transcriptTokens = tokens(trimmed)
+        guard !transcriptTokens.isEmpty,
+              transcriptTokens.count <= vocabTokens.count + 3 else { return false }
+        let matching = transcriptTokens.filter { vocabTokens.contains($0) }.count
+        return Double(matching) >= Double(transcriptTokens.count) * 0.7
     }
 
     /// True when the recording contains essentially no audio. An empty AAC/m4a

@@ -360,6 +360,22 @@ enum SelfTest {
                   out.contains("Murschetz"), detail: "Output: \(out)")
         }
 
+        // Prompt-echo guard — real-world fixture from 2026-08-13: silent audio
+        // made the recogniser "transcribe" the user's dictionary verbatim.
+        let vocabFixture = "isolutions, RLS, Row Level Security, SCD, Slowly Changing Dimensions, RACI Matrix, Velafrica"
+        check("Wörterbuch-Echo wird abgefangen",
+              TranscriptionService.looksLikePromptEcho(
+                  transcript: "isolutions, RLS, Row Level Security, SCD, Slowly Changing Dimensions, RACI Matrix, Velafrica",
+                  vocabulary: vocabFixture))
+        check("»context:« wird abgefangen",
+              TranscriptionService.looksLikePromptEcho(transcript: "context:", vocabulary: vocabFixture))
+        check("Echter Satz MIT Wörterbuch-Begriffen passiert",
+              !TranscriptionService.looksLikePromptEcho(
+                  transcript: "Bitte prüfe die RACI Matrix für das Projekt mit isolutions und melde dich bei mir, danke.",
+                  vocabulary: vocabFixture))
+        check("Kurzes normales Diktat passiert",
+              !TranscriptionService.looksLikePromptEcho(transcript: "Danke, passt für mich.", vocabulary: vocabFixture))
+
         var vpAllValid = true
         for rate in [48_000.0, 44_100.0, 32_000.0, 24_000.0, 16_000.0] {
             let s: [String: Any] = [
