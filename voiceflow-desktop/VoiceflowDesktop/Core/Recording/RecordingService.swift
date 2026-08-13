@@ -72,20 +72,27 @@ final class RecordingService {
             tempFileURL = url
             try startEngineRecording(deviceID: coreAudioDeviceID, to: url)
         } else {
-            // System default: voice-processed capture first (Apple's noise
-            // suppression + echo cancellation + auto gain — the same class of
-            // pre-processing ChatGPT & Co. apply before transcription). If the
-            // voice-processing engine fails for any reason, fall back to the
-            // proven plain AVAudioRecorder path — recording must never die.
+            // System default — plain AVAudioRecorder, the proven path.
+            //
+            // NOTE on Apple's voice processing (noise suppression/AGC): tried in
+            // 1.1.2 pre-release and REVERTED — on real hardware the VP unit can
+            // deliver silent frames (format negotiates, frames flow, no signal),
+            // which silently produces empty dictations. It stays available only
+            // behind this hidden flag until it has level-metered verification:
+            //   defaults write com.voiceflow.desktop experimentalVoiceProcessing -bool true
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("vf_\(UUID().uuidString).m4a")
             tempFileURL = url
-            do {
-                try startVoiceProcessedRecording(to: url)
-                NSLog("[VF-Record] Voice-processed capture active")
-            } catch {
-                NSLog("[VF-Record] Voice processing unavailable (%@) — plain recorder",
-                      String(describing: error))
+            if UserDefaults.standard.bool(forKey: "experimentalVoiceProcessing") {
+                do {
+                    try startVoiceProcessedRecording(to: url)
+                    NSLog("[VF-Record] EXPERIMENTAL voice-processed capture active")
+                } catch {
+                    NSLog("[VF-Record] Voice processing unavailable (%@) — plain recorder",
+                          String(describing: error))
+                    try startRecorderRecording(to: url)
+                }
+            } else {
                 try startRecorderRecording(to: url)
             }
         }
@@ -181,39 +188,68 @@ final class RecordingService {
         return 48_000
     }
 
+    /// Frames written by the voice-processing tap — watched by the 2-second
+    /// watchdog below. Written on the audio thread, read on main; a torn read
+    /// only delays the fallback by one tick, so plain Int64 is fine here.
+    private var vpFramesWritten: Int64 = 0
+
     /// Captures through Apple's voice-processing unit: noise suppression, echo
     /// cancellation and automatic gain control — the input is levelled and
     /// cleaned before it ever reaches the encoder, which is a large part of why
     /// ChatGPT-style recorders "understand" better in real rooms.
+    ///
+    /// Robustness (learned the hard way): the VP unit negotiates its real
+    /// format only once audio flows, so the output file is created lazily from
+    /// the FIRST delivered buffer — no format guessing. And if no audio arrives
+    /// within 2 seconds, a watchdog swaps to the plain recorder mid-recording:
+    /// voice processing can never cost the user a dictation.
     private func startVoiceProcessedRecording(to url: URL) throws {
         let engine    = AVAudioEngine()
         let inputNode = engine.inputNode
         try inputNode.setVoiceProcessingEnabled(true)
-
-        let format = inputNode.outputFormat(forBus: 0)
-        guard format.sampleRate > 0, format.channelCount > 0 else {
-            throw RecordingError.couldNotStart
-        }
-
-        let settings: [String: Any] = [
-            AVFormatIDKey:         Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey:       format.sampleRate,
-            AVNumberOfChannelsKey: Int(format.channelCount),
-            AVEncoderBitRateKey:   Self.vpBitrate(forSampleRate: format.sampleRate)
-        ]
-        let file = try AVAudioFile(forWriting: url, settings: settings,
-                                   commonFormat: format.commonFormat,
-                                   interleaved: format.isInterleaved)
-        audioFile = file
-
-        inputNode.installTap(onBus: 0, bufferSize: 4_096, format: format) { [weak file] buffer, _ in
-            guard let f = file else { return }
-            try? f.write(from: buffer)
-        }
-
         engine.prepare()
+
+        vpFramesWritten = 0
+        // format: nil → the tap uses the node's true output format, whatever
+        // the VP unit negotiated. The file adopts the first buffer's format.
+        inputNode.installTap(onBus: 0, bufferSize: 4_096, format: nil) { [weak self] buffer, _ in
+            guard let self else { return }
+            if self.audioFile == nil {
+                let fmt = buffer.format
+                let settings: [String: Any] = [
+                    AVFormatIDKey:         Int(kAudioFormatMPEG4AAC),
+                    AVSampleRateKey:       fmt.sampleRate,
+                    AVNumberOfChannelsKey: Int(fmt.channelCount),
+                    AVEncoderBitRateKey:   Self.vpBitrate(forSampleRate: fmt.sampleRate)
+                ]
+                self.audioFile = try? AVAudioFile(forWriting: url, settings: settings,
+                                                  commonFormat: fmt.commonFormat,
+                                                  interleaved: fmt.isInterleaved)
+            }
+            if let f = self.audioFile, (try? f.write(from: buffer)) != nil {
+                self.vpFramesWritten += Int64(buffer.frameLength)
+            }
+        }
+
         try engine.start()
         audioEngine = engine
+
+        // Watchdog: if VP delivers nothing, downgrade in place — the recording
+        // keeps running on the proven plain path (worst case ~2 s lost).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self, self.isRecording, self.audioEngine === engine else { return }
+            if self.vpFramesWritten == 0 {
+                NSLog("[VF-Record] Voice processing delivered no audio in 2 s — switching to plain recorder")
+                engine.inputNode.removeTap(onBus: 0)
+                engine.stop()
+                self.audioEngine = nil
+                self.audioFile = nil
+                try? FileManager.default.removeItem(at: url)
+                try? self.startRecorderRecording(to: url)
+            } else {
+                NSLog("[VF-Record] Voice-processed capture confirmed (%lld frames)", self.vpFramesWritten)
+            }
+        }
     }
 
     // MARK: - Private: AVAudioEngine path (specific device)

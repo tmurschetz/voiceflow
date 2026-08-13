@@ -33,10 +33,15 @@ unprocessed mic signal.
   no summarising. At the same time the cleanup now **actively fixes likely
   mishearings** from context and knows your **dictionary** (Eigene Begriffe),
   so garbled names get corrected after transcription too.
-- **Voice-processed capture:** recording now runs through Apple's voice
-  processing — noise suppression, echo cancellation and automatic gain — the
-  same class of pre-processing ChatGPT-style recorders apply. Falls back to the
-  proven plain recorder automatically if unavailable.
+- **Prompt-echo guard:** on silent/near-silent audio the recogniser tends to
+  hallucinate its own prompt — pasting the user's dictionary or junk like
+  "context:". Such transcripts are now detected and rejected with the friendly
+  "keine Sprache aufgenommen" hint instead of reaching the output.
+- Apple's voice-processed capture was trialled and **reverted**: on real
+  hardware the unit can deliver silent frames, producing empty dictations.
+  It remains available behind a hidden flag (`experimentalVoiceProcessing`)
+  until it has level-metered verification; the proven plain recorder stays
+  the default.
 
 ### Tests
 - Selftest [17]: qualifier survival, dictionary-driven mishearing correction,
