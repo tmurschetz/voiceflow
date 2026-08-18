@@ -360,6 +360,22 @@ enum SelfTest {
                   out.contains("Murschetz"), detail: "Output: \(out)")
         }
 
+        // ß → ss (v1.1.2): whisper emits Germany orthography; the strict
+        // letter-fidelity rules blocked the model from converting, so the
+        // conversion is deterministic in code now. Real-world fixture "weißt".
+        if let out = await process(processor, "du weißt dass das Projekt groß ist und so heißt",
+                                   mode: .private, instruction: "", textModel: textModel) {
+            check("ß wird zu ss (weißt→weisst, groß→gross)",
+                  !out.contains("ß") && out.lowercased().contains("weisst") && out.lowercased().contains("gross"),
+                  detail: "Output: \(out)")
+        }
+        check("swissNormalize deterministisch",
+              ModeProcessor.swissNormalize("Du weißt, es ist groß.", mode: .private, instruction: "")
+                  == "Du weisst, es ist gross.")
+        check("Instruierter Random-Modus darf ß behalten",
+              ModeProcessor.swissNormalize("groß", mode: .random, instruction: "Übersetze nach Deutsch")
+                  == "groß")
+
         // Prompt-echo guard — real-world fixture from 2026-08-13: silent audio
         // made the recogniser "transcribe" the user's dictionary verbatim.
         let vocabFixture = "isolutions, RLS, Row Level Security, SCD, Slowly Changing Dimensions, RACI Matrix, Velafrica"
