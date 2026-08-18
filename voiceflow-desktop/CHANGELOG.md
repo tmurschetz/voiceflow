@@ -41,6 +41,11 @@ unprocessed mic signal.
   new gpt-4o cleanup stage. One-time migration; the GPT-4o models remain in the
   catalogue with honest guidance. History now records the audio file's decoded
   duration (`fileSeconds`) alongside the timer for future diagnosis.
+- **ß → ss fixed deterministically:** whisper transcribes German with Germany
+  orthography ("weißt", "groß"); the new strict letter-fidelity rules stopped
+  the cleanup from converting it to Swiss spelling. The conversion now happens
+  in code, always — including on raw-transcript fallbacks. (Instructed Random
+  mode is exempt, and an instruction mentioning ß disables it.)
 - **Prompt-echo guard:** on silent/near-silent audio the recogniser tends to
   hallucinate its own prompt — pasting the user's dictionary or junk like
   "context:". Such transcripts are now detected and rejected with the friendly

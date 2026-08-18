@@ -213,6 +213,21 @@ final class ModeProcessor {
         (requested == "gpt-4o-mini" && inputChars > longTextThresholdChars) ? "gpt-4o" : requested
     }
 
+    /// Swiss Standard German never uses ß — but whisper transcribes German with
+    /// Germany orthography ("weißt", "groß"), and the strict letter-fidelity
+    /// rules stop the model from converting it. So the conversion happens HERE,
+    /// deterministically: ß → ss is orthography, not a word change. Skipped for
+    /// instructed Random (the instruction fully governs style) and whenever the
+    /// user's instruction itself mentions ß (they explicitly want it).
+    static func swissNormalize(_ text: String, mode: ProcessingMode, instruction: String) -> String {
+        let inst = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let faithfulSwiss = mode != .random || inst.isEmpty
+        guard faithfulSwiss, !inst.contains("ß") else { return text }
+        return text
+            .replacingOccurrences(of: "ß", with: "ss")
+            .replacingOccurrences(of: "ẞ", with: "SS")
+    }
+
     /// Cleanup legitimately removes fillers (10–25 %), but must never swallow
     /// content. On long, faithful-edit tasks an output under ~55 % of the input
     /// signals summarisation/truncation. Instructed Random is exempt — the
@@ -278,9 +293,11 @@ final class ModeProcessor {
                                        mode: mode, instruction: userInstruction) {
                     NSLog("[ModeProcessor] Output suspiciously short (%d → %d chars) — returning raw transcript",
                           text.count, polished.count)
-                    return Result(text: text, usedFallback: true)
+                    return Result(text: Self.swissNormalize(text, mode: mode, instruction: userInstruction),
+                                  usedFallback: true)
                 }
-                return Result(text: polished, usedFallback: false)
+                return Result(text: Self.swissNormalize(polished, mode: mode, instruction: userInstruction),
+                              usedFallback: false)
 
             } catch {
                 let retryable = OpenAIRetry.isRetryable(error)
@@ -301,13 +318,15 @@ final class ModeProcessor {
                 }
                 if retryable {
                     NSLog("[ModeProcessor] All %d attempts failed. Returning raw transcript.", Self.maxAttempts)
-                    return Result(text: text, usedFallback: true)
+                    return Result(text: Self.swissNormalize(text, mode: mode, instruction: userInstruction),
+                                  usedFallback: true)
                 }
                 throw error
             }
         }
 
-        return Result(text: text, usedFallback: true)
+        return Result(text: Self.swissNormalize(text, mode: mode, instruction: userInstruction),
+                      usedFallback: true)
     }
 
 }
