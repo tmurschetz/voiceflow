@@ -33,6 +33,14 @@ unprocessed mic signal.
   no summarising. At the same time the cleanup now **actively fixes likely
   mishearings** from context and knows your **dictionary** (Eigene Begriffe),
   so garbled names get corrected after transcription too.
+- **Transcription default → `whisper-1` (pause robustness):** gpt-4o-transcribe
+  demonstrably stops transcribing at longer thinking pauses — verified on a real
+  20-minute dictation (ended mid-sentence, 18 % less content than whisper-1;
+  a pause-heavy 147-second dictation came back as a single sentence). whisper-1
+  transcribes the same audio completely. Mishearing accuracy is preserved by the
+  new gpt-4o cleanup stage. One-time migration; the GPT-4o models remain in the
+  catalogue with honest guidance. History now records the audio file's decoded
+  duration (`fileSeconds`) alongside the timer for future diagnosis.
 - **Prompt-echo guard:** on silent/near-silent audio the recogniser tends to
   hallucinate its own prompt — pasting the user's dictionary or junk like
   "context:". Such transcripts are now detected and rejected with the friendly

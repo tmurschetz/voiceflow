@@ -48,6 +48,26 @@ final class SettingsService: ObservableObject {
         NSLog("[VF-Settings] Migrated transcription model: gpt-4o-mini-transcribe → gpt-4o-transcribe")
     }
 
+    /// Second transcription migration (1.1.2): gpt-4o-transcribe demonstrably
+    /// stops transcribing at longer thinking pauses (verified on a real 20-min
+    /// dictation: ended mid-sentence, 18 % less content than whisper-1; short
+    /// pause-heavy dictations lost almost everything). whisper-1 transcribes
+    /// the same audio completely — mishearings are fixed by the gpt-4o cleanup
+    /// stage since 1.1.2, so accuracy is preserved.
+    func migrateTranscribeModelToWhisperIfNeeded() {
+        let flag = "com.voiceflow.desktop.transcribeModelMigrated_v2"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        UserDefaults.standard.set(true, forKey: flag)
+
+        var settings = loadSettings()
+        guard settings.transcribeModel == "gpt-4o-transcribe"
+                || settings.transcribeModel == "gpt-4o-mini-transcribe" else { return }
+        settings.transcribeModel = "whisper-1"
+        try? saveSettings(settings)
+        NSLog("[VF-Settings] Migrated transcription model: %@ → whisper-1 (pause robustness)",
+              settings.transcribeModel)
+    }
+
     /// One-time upgrade of the rewrite model (1.1.2): mini's cleanup measurably
     /// degraded dictations (dropped qualifiers, swapped synonyms) — gpt-4o is
     /// the new default for faithful cleanup. Same pattern as above: users still

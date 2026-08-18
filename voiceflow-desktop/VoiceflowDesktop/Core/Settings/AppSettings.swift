@@ -125,23 +125,23 @@ struct TranscribeModel: Identifiable, Equatable {
 
     static let all: [TranscribeModel] = [
         TranscribeModel(
+            id: "whisper-1",
+            name: "Whisper — empfohlen",
+            guidance: "Der zuverlässigste: transkribiert auch Diktate mit Denkpausen vollständig (die GPT-4o-Modelle brechen dort nachweislich ab). 98 Sprachen, ≈ 0.6 Rp./Min. Verhörer korrigiert die Politur-Stufe."
+        ),
+        TranscribeModel(
             id: "gpt-4o-transcribe",
-            name: "GPT-4o Transcribe — empfohlen",
-            guidance: "Beste Genauigkeit (≈ 22 % weniger Fehler als die anderen, ≈ 0.6 Rp./Min). Erkennt Namen, Fachbegriffe und Komposita zuverlässiger — die richtige Wahl für saubere Ergebnisse."
+            name: "GPT-4o Transcribe",
+            guidance: "Punktgenau bei klarer, pausenfreier Sprache — kann aber bei längeren Sprechpausen mitten im Diktat aufhören (getestet: 20-Min-Aufnahme endete mitten im Satz)."
         ),
         TranscribeModel(
             id: "gpt-4o-mini-transcribe",
             name: "GPT-4o mini Transcribe — am günstigsten",
-            guidance: "Am schnellsten und halb so teuer (≈ 0.3 Rp./Min), aber etwas fehleranfälliger bei selteneren Wörtern. Für einfache, klare Diktate ok."
-        ),
-        TranscribeModel(
-            id: "whisper-1",
-            name: "Whisper — breiteste Sprachabdeckung",
-            guidance: "Der bewährte Klassiker mit 98 unterstützten Sprachen (≈ 0.6 Rp./Min) — die beste Wahl für seltenere Sprachen."
+            guidance: "Am schnellsten und halb so teuer (≈ 0.3 Rp./Min), aber fehleranfälliger und mit derselben Pausen-Schwäche wie GPT-4o Transcribe."
         )
     ]
 
-    static let recommended = all[0]   // gpt-4o-transcribe
+    static let recommended = all[0]   // whisper-1
 
     static func byID(_ id: String) -> TranscribeModel {
         all.first { $0.id == id } ?? recommended
