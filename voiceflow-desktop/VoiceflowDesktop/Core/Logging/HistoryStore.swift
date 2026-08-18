@@ -19,6 +19,10 @@ final class HistoryStore {
         let success: Bool
         let usedFallback: Bool
         let errorMessage: String?
+        /// Decoded duration of the actual audio FILE (vs. audioSeconds = UI
+        /// timer). Diagnostic: a mismatch means capture truncated; a match with
+        /// a short transcript means the recogniser dropped content. (1.1.2)
+        var fileSeconds: Int? = nil
     }
 
     static let shared = HistoryStore()
@@ -42,10 +46,11 @@ final class HistoryStore {
     // MARK: - Append
 
     func logCompleted(mode: ProcessingMode, raw: String, final: String,
-                      audioSeconds: Int?, usedFallback: Bool) {
+                      audioSeconds: Int?, usedFallback: Bool, fileSeconds: Int? = nil) {
         append(Entry(date: Date(), mode: mode.rawValue, raw: raw, final: final,
                      audioSeconds: audioSeconds, success: true,
-                     usedFallback: usedFallback, errorMessage: nil))
+                     usedFallback: usedFallback, errorMessage: nil,
+                     fileSeconds: fileSeconds))
     }
 
     func logFailed(mode: ProcessingMode, errorMessage: String) {

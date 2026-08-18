@@ -218,8 +218,8 @@ enum SelfTest {
 
         // 12. v1.1 quality: default model + recognition-prompt / vocabulary logic.
         print("\n[12] Standardmodell & Erkennungs-Prompt (v1.1)")
-        check("Standard-Transkriptionsmodell = gpt-4o-transcribe",
-              TranscribeModel.recommended.id == "gpt-4o-transcribe",
+        check("Standard-Transkriptionsmodell = whisper-1 (pausen-robust)",
+              TranscribeModel.recommended.id == "whisper-1",
               detail: "ist \(TranscribeModel.recommended.id)")
 
         let pDE = TranscriptionService.recognitionPrompt(for: .manual(.german), vocabulary: "")

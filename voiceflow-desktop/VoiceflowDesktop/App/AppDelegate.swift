@@ -67,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // One-time: upgrade users still on the old, less accurate default model.
         settingsService.migrateTranscribeModelIfNeeded()
+        settingsService.migrateTranscribeModelToWhisperIfNeeded()
         settingsService.migrateTextModelIfNeeded()
 
         // Load local settings + bind shortcuts immediately — no network needed.
@@ -203,12 +204,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
                 // Local history (respects the privacy toggle) + last-dictation in the panel
                 if settings?.historyEnabled ?? true {
+                    let fileSeconds = TranscriptionService.audioDuration(url: audio.fileURL).map { Int($0) }
                     HistoryStore.shared.logCompleted(
                         mode: mode,
                         raw: transcriptionResult.transcript,
                         final: processed,
                         audioSeconds: audioSeconds,
-                        usedFallback: processingResult.usedFallback
+                        usedFallback: processingResult.usedFallback,
+                        fileSeconds: fileSeconds
                     )
                 }
                 menuBarController?.setLastDictation(processed)
@@ -330,7 +333,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     raw: transcriptionResult.transcript,
                     final: processingResult.text,
                     audioSeconds: nil,
-                    usedFallback: processingResult.usedFallback
+                    usedFallback: processingResult.usedFallback,
+                    fileSeconds: TranscriptionService.audioDuration(url: rescued.fileURL).map { Int($0) }
                 )
             }
             menuBarController?.setLastDictation(processingResult.text)
