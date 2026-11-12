@@ -60,6 +60,10 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 - Shortcut recorder in Settings/Setup accepted no key presses on macOS 26/27 —
   KeyboardShortcuts 2.4.0 bug (sindresorhus/KeyboardShortcuts#241). Upgraded to
   3.1.0, which fixes the recorder. Transcribe shortcut can now be set.
+- Shortcut handlers piled up on every Settings auto-save (since 1.0): after
+  changing a shortcut, one key press fired the action several times, so Transcribe
+  started and stopped at once and Dictate did nothing. Handlers are now replaced,
+  not appended.
 
 ### Tests
 - Selftest 59 checks incl. [18]: two-track speaker segmentation on synthetic audio,
