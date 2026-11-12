@@ -195,10 +195,9 @@ private struct HistoryRow: View {
 
     private var modeColor: Color {
         switch mode {
-        case .private:  return .blue
-        case .business: return .indigo
-        case .random:   return .pink
-        case .none:     return .gray
+        case .dictate:    return .blue
+        case .transcribe: return .teal
+        case .none:       return .gray   // 1.x "business"/"random" entries
         }
     }
 

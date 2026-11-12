@@ -68,6 +68,23 @@ final class SettingsService: ObservableObject {
               settings.transcribeModel)
     }
 
+    /// Third transcription migration (2.0): OpenAI deprecated whisper-1 and the
+    /// gpt-4o transcribe models (shutdown 2027-02-26). `gpt-transcribe` is the
+    /// documented successor and — verified on the same real 20-minute dictation —
+    /// transcribes pause-heavy speech completely (10 894 chars vs whisper's 10 714).
+    func migrateTranscribeModelToGptTranscribeIfNeeded() {
+        let flag = "com.voiceflow.desktop.transcribeModelMigrated_v3"
+        guard !UserDefaults.standard.bool(forKey: flag) else { return }
+        UserDefaults.standard.set(true, forKey: flag)
+
+        var settings = loadSettings()
+        guard ["whisper-1", "gpt-4o-transcribe", "gpt-4o-mini-transcribe"].contains(settings.transcribeModel) else { return }
+        let old = settings.transcribeModel
+        settings.transcribeModel = "gpt-transcribe"
+        try? saveSettings(settings)
+        NSLog("[VF-Settings] Migrated transcription model: %@ → gpt-transcribe (deprecation)", old)
+    }
+
     /// One-time upgrade of the rewrite model (1.1.2): mini's cleanup measurably
     /// degraded dictations (dropped qualifiers, swapped synonyms) — gpt-4o is
     /// the new default for faithful cleanup. Same pattern as above: users still

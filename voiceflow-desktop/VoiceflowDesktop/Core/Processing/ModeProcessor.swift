@@ -2,34 +2,39 @@ import Foundation
 
 // MARK: - ProcessingMode
 
-/// The three dictation modes. Each can be personalised with a free-text
-/// instruction from Settings (AppSettings.instruction(for:)).
+/// The two modes of Voiceflow 2.0.
+///
+/// - `dictate`   — ChatGPT-style dictation: fillers out, punctuation in, mishearings
+///                 fixed, otherwise exactly what was said. Pasted into the active field.
+/// - `transcribe` — call transcription (Teams & Co.): records both sides, labels
+///                 speakers, lands in the call history — never pastes anywhere.
+///
+/// Raw values are storage keys (history, rescue files, settings): `dictate` keeps
+/// the legacy value "private" so existing data stays readable. The 1.x modes
+/// "business" and "random" were removed in 2.0; old entries decode to nil and are
+/// shown neutrally.
 enum ProcessingMode: String, CaseIterable {
-    case `private` = "private"
-    case business  = "business"
-    case random    = "random"
+    case dictate    = "private"
+    case transcribe = "transcribe"
 
     var displayName: String {
         switch self {
-        case .private:  return "Privat"
-        case .business: return "Business"
-        case .random:   return "Random"
+        case .dictate:    return "Dictate"
+        case .transcribe: return "Transcribe"
         }
     }
 
     var shortDescription: String {
         switch self {
-        case .private:  return "Leichte Korrektur — dein Wortlaut bleibt"
-        case .business: return "Professioneller, geschäftstauglicher Ton"
-        case .random:   return "Deine Regeln — ganz nach deiner Instruktion"
+        case .dictate:    return "Füllwörter weg, sonst wortgetreu — wie gesprochen"
+        case .transcribe: return "Calls mitschreiben — beide Seiten, in die History"
         }
     }
 
     var sfSymbol: String {
         switch self {
-        case .private:  return "person.fill"
-        case .business: return "briefcase.fill"
-        case .random:   return "sparkles"
+        case .dictate:    return "mic.fill"
+        case .transcribe: return "phone.fill"
         }
     }
 
@@ -57,16 +62,9 @@ enum ProcessingMode: String, CaseIterable {
     /// Builds the full system prompt for this mode, including the user's
     /// custom instruction when present.
     ///
-    /// Privat / Business are opinionated modes: base role + absolute rules +
-    /// (optional instruction with precedence) + default style.
-    ///
-    /// Random is different — it is PURELY instruction-driven:
-    ///   - no instruction  → behaves exactly like Privat (light cleanup)
-    ///   - with instruction → the instruction is the COMPLETE spec (language,
-    ///     tone, emoji, formatting, everything). No default-style block is added,
-    ///     so creative instructions ("add emojis and swear words", "translate to
-    ///     English", "write in Zürich dialect") aren't fought by opinionated
-    ///     defaults like the Swiss-German language default or "don't add anything".
+    /// Dictate cleanup: base role + absolute rules + (optional instruction with
+    /// precedence) + default style. (Transcribe mode never runs a rewrite — call
+    /// transcripts stay verbatim; this prompt is only used by the dictation flow.)
     func systemPrompt(userInstruction: String, vocabulary: String = "") -> String {
         let instruction = userInstruction.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasInstruction = !instruction.isEmpty
@@ -84,27 +82,7 @@ enum ProcessingMode: String, CaseIterable {
         2. Output ONLY the result — no preamble, no quotes, no commentary, no delimiters.
         """
 
-        // RANDOM: purely instruction-driven.
-        if self == .random {
-            guard hasInstruction else {
-                // Empty instruction → behave like Privat.
-                return ProcessingMode.private.systemPrompt(userInstruction: "", vocabulary: vocabulary)
-            }
-            return """
-            You are a text transformer for a dictation tool. Transform the dictated text strictly \
-            according to the user's instruction below. The instruction FULLY defines the result — \
-            its language, tone, length, formatting, and whether to add things like emoji or drop \
-            filler words. Start from the dictated words and apply the instruction; do not impose any \
-            style, language or rule the instruction does not ask for.
-
-            \(absolute)
-
-            USER'S INSTRUCTION — the complete spec for this transformation:
-            «\(instruction)»
-            """
-        }
-
-        // Default style for Privat / Business — applied where the instruction is silent.
+        // Default style — applied where the instruction is silent.
         let vocabBlock = vocab.isEmpty ? "" : """
 
         - The speaker's known names and terms: \(vocab). Speech recognition often garbles \
@@ -135,29 +113,14 @@ enum ProcessingMode: String, CaseIterable {
         - Format numbers, dates, e-mail addresses and URLs properly.\(vocabBlock)
         """
 
-        let base: String
-        switch self {
-        case .private:
-            base = """
-            You are a transcription editor for a dictation tool. Lightly clean up the dictated \
-            text: fix punctuation and capitalisation, correct likely mishearings using context, \
-            apply self-corrections, remove fillers. Everything else stays EXACTLY as spoken: \
-            do NOT rewrite, restructure, shorten or paraphrase, and never replace the speaker's \
-            words with synonyms — your output should read as what the speaker said, cleaned, \
-            not as your version of it.
-            """
-        case .business:
-            base = """
-            You are a professional writing editor for a dictation tool. Rewrite the dictated \
-            text in a polished, professional register — direct and concise, Swiss business \
-            style, no flowery phrasing. Keep the same format and roughly the same length as \
-            what was said. Fix grammar, tighten phrasing, remove fillers — but do not add \
-            new content or change the meaning. "Professional" refers to tone and precision \
-            only — it never means switching the form of address (a dictated "du" stays "du").
-            """
-        case .random:
-            base = ""   // unreachable — Random is fully handled above
-        }
+        let base = """
+        You are a transcription editor for a dictation tool. Lightly clean up the dictated \
+        text: fix punctuation and capitalisation, correct likely mishearings using context, \
+        apply self-corrections, remove fillers. Everything else stays EXACTLY as spoken: \
+        do NOT rewrite, restructure, shorten or paraphrase, and never replace the speaker's \
+        words with synonyms — your output should read as what the speaker said, cleaned, \
+        not as your version of it.
+        """
 
         if hasInstruction {
             return """
@@ -221,8 +184,7 @@ final class ModeProcessor {
     /// user's instruction itself mentions ß (they explicitly want it).
     static func swissNormalize(_ text: String, mode: ProcessingMode, instruction: String) -> String {
         let inst = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        let faithfulSwiss = mode != .random || inst.isEmpty
-        guard faithfulSwiss, !inst.contains("ß") else { return text }
+        guard !inst.contains("ß") else { return text }
         return text
             .replacingOccurrences(of: "ß", with: "ss")
             .replacingOccurrences(of: "ẞ", with: "SS")
@@ -234,9 +196,7 @@ final class ModeProcessor {
     /// instruction may legitimately condense or translate.
     static func looksTruncated(raw: String, polished: String,
                                mode: ProcessingMode, instruction: String) -> Bool {
-        let faithful = mode != .random
-            || instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard faithful, raw.count > 2_000 else { return false }
+        guard raw.count > 2_000 else { return false }
         return polished.count < Int(Double(raw.count) * 0.55)
     }
 
@@ -272,8 +232,7 @@ final class ModeProcessor {
         // text arbitrarily (translate, restructure) — prediction would be
         // rejected and only cost extra, so skip it there. The prediction hint is
         // the RAW text (the output has no delimiters), not the wrapped message.
-        let predictOutput = !(mode == .random
-            && !userInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        let predictOutput = true   // dictation cleanup: output ≈ input
 
         for attempt in 1...Self.maxAttempts {
             do {

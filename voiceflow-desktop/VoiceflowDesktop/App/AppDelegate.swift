@@ -68,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // One-time: upgrade users still on the old, less accurate default model.
         settingsService.migrateTranscribeModelIfNeeded()
         settingsService.migrateTranscribeModelToWhisperIfNeeded()
+        settingsService.migrateTranscribeModelToGptTranscribeIfNeeded()
         settingsService.migrateTextModelIfNeeded()
 
         // Load local settings + bind shortcuts immediately — no network needed.
@@ -143,7 +144,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Dictation Pipeline
 
     func handleShortcutTriggered(mode: ProcessingMode) {
-        Task { await runDictationPipeline(mode: mode) }
+        switch mode {
+        case .dictate:
+            Task { await runDictationPipeline(mode: mode) }
+        case .transcribe:
+            toggleCallTranscription()
+        }
+    }
+
+    /// Transcribe mode — call recording (mic + system audio). Wired up in the
+    /// next step of the 2.0 build; until then the shortcut explains itself.
+    private func toggleCallTranscription() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Transcribe kommt gleich"
+        alert.informativeText = "Der Call-Modus (beide Seiten mitschreiben, Teams-Automatik, History) wird gerade gebaut — dieser Shortcut ist schon reserviert."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func runDictationPipeline(mode: ProcessingMode) async {

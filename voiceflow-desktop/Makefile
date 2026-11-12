@@ -10,7 +10,7 @@ BUILD    = .build
 APP      = $(BUILD)/Release/$(APP_NAME).app
 DMG      = $(APP_NAME)-$(VERSION).dmg
 
-VERSION  = 1.1.2
+VERSION  = 2.0.0
 
 # ─── Code signing ─────────────────────────────────────────────────────────────
 # SIGN_IDENTITY defaults to "-" (ad-hoc, no Apple account). The `release` target

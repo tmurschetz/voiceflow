@@ -77,8 +77,6 @@ final class TranscriptionService {
             usedLocale = lang.rawValue
         }
 
-        let prompt = Self.recognitionPrompt(for: language, vocabulary: vocabulary)
-
         // Long-recording support (up to ~30 min): the upload size guard catches
         // files beyond the API's 25 MB cap, and recordings longer than
         // gpt-4o-transcribe's 25-minute duration limit are routed to whisper-1
@@ -92,6 +90,12 @@ final class TranscriptionService {
             NSLog("[VF-Transcribe] %ds audio exceeds %@'s limit — using whisper-1", audioSeconds, model)
         }
 
+        // gpt-transcribe takes the dictionary natively (`keywords`); older models
+        // get it folded into the prompt.
+        let nativeKeywords = effectiveModel.hasPrefix("gpt-transcribe")
+        let prompt = Self.recognitionPrompt(for: language, vocabulary: nativeKeywords ? "" : vocabulary)
+        let keywords = nativeKeywords ? Self.keywordsLine(vocabulary) : nil
+
         var lastError: Error = OpenAIError.invalidResponse
         for attempt in 1...Self.maxAttempts {
             do {
@@ -102,6 +106,7 @@ final class TranscriptionService {
                     model: effectiveModel,
                     apiKey: apiKey,
                     prompt: prompt,
+                    keywords: keywords,
                     audioSeconds: audioSeconds
                 )
                 guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -114,7 +119,10 @@ final class TranscriptionService {
                     NSLog("[VF-Transcribe] Transcript is a prompt echo/junk — treating as no speech")
                     throw TranscriptionError.noSpeech
                 }
-                return TranscriptionResult(transcript: result.text, usedLocale: usedLocale)
+                // Auto-detect: report what the model actually heard (e.g. "de" or "de+en").
+                let locale = (usedLocale == "auto" && !result.languages.isEmpty)
+                    ? result.languages.joined(separator: "+") : usedLocale
+                return TranscriptionResult(transcript: result.text, usedLocale: locale)
 
             } catch {
                 lastError = error
@@ -202,6 +210,20 @@ final class TranscriptionService {
             if seconds < 0.35 { return true }
         }
         return false
+    }
+
+    /// The dictionary as gpt-transcribe's `keywords` value: one line, comma
+    /// separated, without the characters the API rejects (< > CR LF), capped.
+    static func keywordsLine(_ vocabulary: String) -> String {
+        let cleaned = vocabulary
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+            .replacingOccurrences(of: "<", with: "")
+            .replacingOccurrences(of: ">", with: "")
+        return String(cleaned.prefix(480))
     }
 
     /// Builds the OpenAI transcription `prompt` — a short bias string that nudges

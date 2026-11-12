@@ -199,30 +199,29 @@ private struct ModesSection: View {
     var body: some View {
         Section {
             ModeRow(
-                mode: .private, color: .blue,
+                mode: .dictate, color: .blue,
                 name: .dictatePrivate,
                 instruction: $viewModel.draft.instructionPrivate,
                 placeholder: "z. B. «Behalte Anglizismen bei, schreibe Zahlen immer als Ziffern»",
                 onShortcutChange: { viewModel.autoSave() }
             )
-            ModeRow(
-                mode: .business, color: .indigo,
-                name: .dictateBusiness,
-                instruction: $viewModel.draft.instructionBusiness,
-                placeholder: "z. B. «Unterschreibe nie, verwende unser Wording: Kundinnen und Kunden»",
-                onShortcutChange: { viewModel.autoSave() }
-            )
-            ModeRow(
-                mode: .random, color: .pink,
-                name: .dictateRandom,
-                instruction: $viewModel.draft.instructionRandom,
-                placeholder: "z. B. «Übersetze alles auf Englisch» oder «Formatiere als Bullet-Liste»",
-                onShortcutChange: { viewModel.autoSave() }
-            )
+            // Transcribe has no instruction — call transcripts stay verbatim.
+            HStack(spacing: 10) {
+                IconBadge(systemName: ProcessingMode.transcribe.sfSymbol, color: .teal)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ProcessingMode.transcribe.displayName)
+                    Text(ProcessingMode.transcribe.shortDescription)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                KeyboardShortcuts.Recorder(for: .transcribeToggle) { _ in viewModel.autoSave() }
+            }
+            .padding(.vertical, 2)
         } header: {
             Text("Modi")
         } footer: {
-            Text("Gleicher Shortcut nochmals drücken stoppt die Aufnahme. Die Instruktion personalisiert den Output des jeweiligen Modus — sie wird der KI bei jedem Diktat mitgegeben.")
+            Text("Dictate: Shortcut drücken, sprechen, nochmals drücken — der Text landet im aktiven Feld. Die Instruktion personalisiert die Bereinigung. Transcribe: startet/stoppt die Mitschrift eines Calls — beide Seiten, Ergebnis im Verlauf.")
                 .font(.caption)
         }
     }

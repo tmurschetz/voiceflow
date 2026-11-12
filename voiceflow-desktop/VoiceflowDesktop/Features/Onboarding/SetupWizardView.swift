@@ -123,9 +123,8 @@ final class SetupWizardViewModel: ObservableObject {
     }
 
     private func syncShortcutsFromRecorder() {
-        draft.shortcutPrivate  = KeyboardShortcuts.getShortcut(for: .dictatePrivate)?.description ?? draft.shortcutPrivate
-        draft.shortcutBusiness = KeyboardShortcuts.getShortcut(for: .dictateBusiness)?.description ?? draft.shortcutBusiness
-        draft.shortcutRandom   = KeyboardShortcuts.getShortcut(for: .dictateRandom)?.description ?? draft.shortcutRandom
+        draft.shortcutPrivate    = KeyboardShortcuts.getShortcut(for: .dictatePrivate)?.description ?? draft.shortcutPrivate
+        draft.shortcutTranscribe = KeyboardShortcuts.getShortcut(for: .transcribeToggle)?.description ?? draft.shortcutTranscribe
     }
 }
 
@@ -399,15 +398,13 @@ private struct APIKeyStep: View {
 private struct ShortcutsStep: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Leg für jeden Modus eine Tastenkombination fest. Gleiche Kombination nochmals drücken stoppt die Aufnahme.")
+            Text("Leg für beide Modi eine Tastenkombination fest. Dieselbe Kombination nochmals drücken stoppt die Aufnahme.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            WizShortcut(icon: "person.fill", color: .blue, label: "Privat",
-                        sub: "Leichte Korrektur", name: .dictatePrivate)
-            WizShortcut(icon: "briefcase.fill", color: .indigo, label: "Business",
-                        sub: "Professioneller Ton", name: .dictateBusiness)
-            WizShortcut(icon: "sparkles", color: .pink, label: "Random",
-                        sub: "Macht, was deine Instruktion sagt", name: .dictateRandom)
-            Text("Tipp: z. B. ⌥1, ⌥2, ⌥3.")
+            WizShortcut(icon: "mic.fill", color: .blue, label: "Dictate",
+                        sub: "Diktieren in jedes Textfeld", name: .dictatePrivate)
+            WizShortcut(icon: "phone.fill", color: .teal, label: "Transcribe",
+                        sub: "Call mitschreiben (beide Seiten)", name: .transcribeToggle)
+            Text("Tipp: z. B. ⌥1 für Dictate, ⌥2 für Transcribe.")
                 .font(.caption).foregroundStyle(.tertiary)
         }
     }

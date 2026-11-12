@@ -54,7 +54,7 @@ enum Uninstaller {
         KeychainStore.apiKey = nil
 
         // 3. Shortcuts + preferences
-        KeyboardShortcuts.reset(.dictatePrivate, .dictateBusiness, .dictateRandom)
+        KeyboardShortcuts.reset(.dictatePrivate, .transcribeToggle)
         if let bundleID = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }

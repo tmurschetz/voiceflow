@@ -107,39 +107,30 @@ enum SelfTest {
             print("  ⏭  Kein Audio übergeben — Transkription übersprungen (Text-Pipeline wird trotzdem geprüft).")
         }
 
-        // 2. Privat mode — light cleanup (v1.0.1 baseline)
-        print("\n[2] Modus Privat — leichte Korrektur")
+        // 2. Dictate — ChatGPT-style light cleanup
+        print("\n[2] Dictate — leichte Korrektur")
         if let out = await process(processor, "also ähm ich wollte nur kurz sagen dass das projekt äh gut läuft",
-                                   mode: .private, instruction: "", textModel: textModel) {
+                                   mode: .dictate, instruction: "", textModel: textModel) {
             check("Füllwörter entfernt (kein 'ähm'/'äh')", !out.lowercased().contains("ähm") && !out.lowercased().contains(" äh "))
             check("Inhalt erhalten ('Projekt')", out.lowercased().contains("projekt"))
             check("Hochdeutsch (kein Dialekt)", dialectScore(out) <= 1, detail: "score \(dialectScore(out))")
         }
 
-        // 3. Business mode — professional rewrite (v1.0.1 baseline)
-        print("\n[3] Modus Business — professioneller Ton")
-        if let out = await process(processor, "sag dem kunden mal kurz dass sich die lieferung leider verzögert sorry",
-                                   mode: .business, instruction: "", textModel: textModel) {
-            check("Nicht leer & umgeschrieben", out.count > 10)
-            check("Kein 'ß' (Schweizer Schreibweise)", !out.contains("ß"))
-            check("Hochdeutsch (kein Dialekt)", dialectScore(out) <= 1, detail: "score \(dialectScore(out))")
-        }
-
-        // 3b. Business must NEVER formalise the form of address (v1.1 fix:
-        // a dictated "du" used to come back as "Sie").
+        // 3. Dictate must NEVER change the form of address (1.1 fix).
+        print("\n[3] Dictate — Anrede bleibt wie gesprochen")
         if let out = await process(processor, "kannst du mir bitte die unterlagen bis morgen mittag schicken danke dir",
-                                   mode: .business, instruction: "", textModel: textModel) {
+                                   mode: .dictate, instruction: "", textModel: textModel) {
             let low = " " + out.lowercased() + " "
             let keptDu = low.contains(" du ") || low.contains(" dir") || low.contains(" dich")
             let forcedSie = low.contains("ihnen") || low.contains("können sie") || low.contains("könnten sie")
-            check("Business behält 'du' (keine Sie-Form erzwungen)", keptDu && !forcedSie,
-                  detail: "Output: \(out)")
+            check("'du' bleibt 'du' (keine Sie-Form)", keptDu && !forcedSie, detail: "Output: \(out)")
+            check("Kein 'ß' (Schweizer Schreibweise)", !out.contains("ß"))
         }
 
         // 4. Guardrail — a QUESTION must be cleaned up, not answered (v1.0.4 fix)
         print("\n[4] Schutzregel — Frage wird bereinigt, nicht beantwortet")
         if let out = await process(processor, "wie spät ist es eigentlich gerade",
-                                   mode: .private, instruction: "", textModel: textModel) {
+                                   mode: .dictate, instruction: "", textModel: textModel) {
             check("Bleibt eine Frage (enthält '?')", out.contains("?"))
             check("Enthält noch 'spät' (nicht beantwortet)", out.lowercased().contains("spät"),
                   detail: "Output: \(out)")
@@ -148,61 +139,18 @@ enum SelfTest {
         // 5. Guardrail — a COMMAND must be cleaned up, not executed (v1.0.4 fix)
         print("\n[5] Schutzregel — Befehl wird bereinigt, nicht ausgeführt")
         if let out = await process(processor, "mach mir eine liste mit drei punkten für das meeting",
-                                   mode: .random, instruction: "", textModel: textModel) {
+                                   mode: .dictate, instruction: "", textModel: textModel) {
             let looksLikeList = out.contains("\n1.") || out.contains("\n- ") || out.contains("•") || out.contains("\n2.")
             check("Keine generierte Liste", !looksLikeList, detail: "Output: \(out.replacingOccurrences(of: "\n", with: "⏎"))")
             check("Enthält noch 'Liste' (Wortlaut erhalten)", out.lowercased().contains("liste"))
         }
 
-        // 6. HEADLINE — Random mode with Swiss-German instruction → dialect output
-        print("\n[6] Modus Random — Schweizerdeutsch (Zürcher Dialekt)")
-        let swissInstr = """
-        Du bist ein Schweizerdeutsch-zu-Schweizerdeutsch Assistent. Die Ausgabe muss \
-        auf Schweizerdeutsch (Zürcher Dialekt) sein, so wie es gesprochen wird. \
-        Beispiele: hoi, chum, wott, nöd, eu, mer, abhole. Kein Hochdeutsch.
-        """
-        if let out = await process(processor, "ich möchte morgen ins büro kommen und die unterlagen abholen",
-                                   mode: .random, instruction: swissInstr, textModel: textModel) {
-            let score = dialectScore(out)
-            check("Dialekt erkannt (≥2 Mundart-Marker)", score >= 2, detail: "score \(score) — Output: \(out)")
-            check("Nicht reines Hochdeutsch", !out.contains("möchte") || score >= 2, detail: "Output: \(out)")
-        }
-
-        // 7. Combined — dialect instruction + a question must still be rewritten, not answered
-        print("\n[7] Kombiniert — Dialekt-Instruktion + Frage")
-        if let out = await process(processor, "kannst du mir sagen was die hauptstadt von frankreich ist",
-                                   mode: .random, instruction: swissInstr, textModel: textModel) {
-            check("Nicht beantwortet (kein 'Paris')", !out.lowercased().contains("paris"),
-                  detail: "Output: \(out)")
-            check("Bleibt eine Frage", out.contains("?"), detail: "Output: \(out)")
-        }
-
-        // 8. Random is purely instruction-driven — creative instruction, Hochdeutsch IN.
-        //    Instruction: keep German, add emoji + swear words. Must NOT turn Swiss-German.
-        print("\n[8] Random — freie Instruktion (Emojis + Kraftausdrücke, Hochdeutsch bleibt)")
-        let funInstr = "Behalte die Sprache des Inputs bei. Füge passende Emojis ein und mach den Ton frech mit ein, zwei Kraftausdrücken."
-        if let out = await process(processor, "der drucker funktioniert schon wieder nicht und ich bin spät dran",
-                                   mode: .random, instruction: funInstr, textModel: textModel) {
-            let hasEmoji = out.unicodeScalars.contains { $0.properties.isEmoji && $0.value > 0x238C }
-            check("Emoji eingefügt (Instruktion befolgt)", hasEmoji, detail: "Output: \(out)")
-            check("Nicht nach Schweizerdeutsch übersetzt", dialectScore(out) <= 1,
-                  detail: "score \(dialectScore(out)) — Output: \(out)")
-        }
-
-        // 9. Random with a translation instruction → output language switches.
-        print("\n[9] Random — Übersetzungs-Instruktion (Deutsch → Englisch)")
+        // 6. Dictate with a custom instruction still transforms (never answers).
+        print("\n[6] Dictate — eigene Instruktion wird befolgt")
         if let out = await process(processor, "bitte schick mir die unterlagen bis morgen mittag",
-                                   mode: .random, instruction: "Translate the text to English.", textModel: textModel) {
+                                   mode: .dictate, instruction: "Translate the text to English.", textModel: textModel) {
             let looksEnglish = out.lowercased().contains("the ") || out.lowercased().contains("please") || out.lowercased().contains("documents")
-            check("Auf Englisch übersetzt", looksEnglish, detail: "Output: \(out)")
-        }
-
-        // 10. Random with NO instruction → must behave like Privat (light cleanup, Hochdeutsch).
-        print("\n[10] Random — ohne Instruktion (= wie Privat)")
-        if let out = await process(processor, "also ähm ich glaub das passt so für mich",
-                                   mode: .random, instruction: "", textModel: textModel) {
-            check("Füllwörter entfernt", !out.lowercased().contains("ähm"))
-            check("Hochdeutsch (kein Dialekt, keine Emojis)", dialectScore(out) <= 1)
+            check("Instruktion angewendet (Englisch)", looksEnglish, detail: "Output: \(out)")
         }
 
         // 11. Empty-recording guard — must be detected locally, before any upload.
@@ -218,9 +166,11 @@ enum SelfTest {
 
         // 12. v1.1 quality: default model + recognition-prompt / vocabulary logic.
         print("\n[12] Standardmodell & Erkennungs-Prompt (v1.1)")
-        check("Standard-Transkriptionsmodell = whisper-1 (pausen-robust)",
-              TranscribeModel.recommended.id == "whisper-1",
+        check("Standard-Transkriptionsmodell = gpt-transcribe",
+              TranscribeModel.recommended.id == "gpt-transcribe",
               detail: "ist \(TranscribeModel.recommended.id)")
+        check("Wörterbuch → keywords-Zeile (eine Zeile, ohne < >)",
+              TranscriptionService.keywordsLine("Murschetz\n<b>RLS</b>\r\nVelafrica") == "Murschetz, bRLS/b, Velafrica")
 
         let pDE = TranscriptionService.recognitionPrompt(for: .manual(.german), vocabulary: "")
         check("Deutsch-Prompt enthält Formatierungshinweis", pDE.contains("Interpunktion"))
@@ -330,13 +280,13 @@ enum SelfTest {
         let longRaw = String(repeating: "wort ", count: 600)   // 3000 Zeichen
         check("Kürzung erkannt (3000→1200 Zeichen bei Privat)",
               ModeProcessor.looksTruncated(raw: longRaw, polished: String(longRaw.prefix(1200)),
-                                           mode: .private, instruction: ""))
+                                           mode: .dictate, instruction: ""))
         check("Normale Bereinigung nicht als Kürzung gewertet",
               !ModeProcessor.looksTruncated(raw: longRaw, polished: String(longRaw.prefix(2400)),
-                                            mode: .private, instruction: ""))
-        check("Random mit Instruktion darf kürzen (z. B. Übersetzung)",
-              !ModeProcessor.looksTruncated(raw: longRaw, polished: "short",
-                                            mode: .random, instruction: "Fasse zusammen"))
+                                            mode: .dictate, instruction: ""))
+        check("Kurze Diktate nie als Kürzung gewertet",
+              !ModeProcessor.looksTruncated(raw: "kurzer satz", polished: "Satz.",
+                                            mode: .dictate, instruction: ""))
 
         // 17. Faithful cleanup (v1.1.2): gpt-4o default, qualifiers survive,
         // mishearings get fixed via context + dictionary, and the
@@ -346,7 +296,7 @@ enum SelfTest {
               detail: "ist \(TextModel.recommended.id)")
 
         if let out = await process(processor, "ich bin weiterhin eigentlich fast zufrieden mit dem stand vom projekt",
-                                   mode: .private, instruction: "", textModel: textModel) {
+                                   mode: .dictate, instruction: "", textModel: textModel) {
             let low = out.lowercased()
             check("Qualifizierer überleben (weiterhin/eigentlich/fast)",
                   low.contains("weiterhin") && low.contains("eigentlich") && low.contains("fast"),
@@ -354,7 +304,7 @@ enum SelfTest {
         }
 
         if let out = await process(processor, "das protokoll geht an thomas mörschetz und das birgley meeting ist morgen",
-                                   mode: .private, instruction: "", textModel: textModel,
+                                   mode: .dictate, instruction: "", textModel: textModel,
                                    vocabulary: "Murschetz, Budget-Meeting, Voiceflow") {
             check("Verhörer via Wörterbuch korrigiert (Mörschetz → Murschetz)",
                   out.contains("Murschetz"), detail: "Output: \(out)")
@@ -364,16 +314,16 @@ enum SelfTest {
         // letter-fidelity rules blocked the model from converting, so the
         // conversion is deterministic in code now. Real-world fixture "weißt".
         if let out = await process(processor, "du weißt dass das Projekt groß ist und so heißt",
-                                   mode: .private, instruction: "", textModel: textModel) {
+                                   mode: .dictate, instruction: "", textModel: textModel) {
             check("ß wird zu ss (weißt→weisst, groß→gross)",
                   !out.contains("ß") && out.lowercased().contains("weisst") && out.lowercased().contains("gross"),
                   detail: "Output: \(out)")
         }
         check("swissNormalize deterministisch",
-              ModeProcessor.swissNormalize("Du weißt, es ist groß.", mode: .private, instruction: "")
+              ModeProcessor.swissNormalize("Du weißt, es ist groß.", mode: .dictate, instruction: "")
                   == "Du weisst, es ist gross.")
-        check("Instruierter Random-Modus darf ß behalten",
-              ModeProcessor.swissNormalize("groß", mode: .random, instruction: "Übersetze nach Deutsch")
+        check("Instruktion mit ß deaktiviert die Umwandlung",
+              ModeProcessor.swissNormalize("groß", mode: .dictate, instruction: "bitte mit ß schreiben")
                   == "groß")
 
         // Prompt-echo guard — real-world fixture from 2026-08-13: silent audio

@@ -5,12 +5,13 @@ import KeyboardShortcuts
 // KeyboardShortcuts requires static extensions at file scope.
 
 extension KeyboardShortcuts.Name {
-    static let dictatePrivate  = Self("dictate_private")
-    static let dictateBusiness = Self("dictate_business")
-    static let dictateRandom   = Self("dictate_random")
+    /// Dictate — the persisted key keeps its 1.x name so users' bindings survive 2.0.
+    static let dictatePrivate   = Self("dictate_private")
+    /// Transcribe — starts/stops a call recording.
+    static let transcribeToggle = Self("transcribe_toggle")
 }
 
-/// Manages global keyboard shortcuts for the three dictation modes.
+/// Manages the global keyboard shortcuts for the two modes.
 ///
 /// Bindings are persisted by the KeyboardShortcuts framework in UserDefaults;
 /// AppSettings stores only the display strings shown in the status panel.
@@ -23,11 +24,11 @@ final class ShortcutManager {
 
     // MARK: - Registration
 
-    /// Bind the mode handler and activate all three shortcuts.
-    /// Called once at startup. Must NOT call reset() — that would wipe the
-    /// user's persisted key bindings.
+    /// Bind the mode handler and activate the shortcuts.
+    /// Called once at startup. Must NOT call reset() on live names — that would
+    /// wipe the user's persisted key bindings.
     func register(settings: AppSettings, handler: @escaping (ProcessingMode) -> Void) {
-        migrateLegacyCalmBinding()
+        retireLegacyBindings()
         self.handler = handler
         attachHandlers()
     }
@@ -39,24 +40,31 @@ final class ShortcutManager {
 
     /// Removes key bindings AND handlers — used by the uninstaller.
     func unregisterAll() {
-        KeyboardShortcuts.reset(.dictatePrivate, .dictateBusiness, .dictateRandom)
+        KeyboardShortcuts.reset(.dictatePrivate, .transcribeToggle)
         handler = nil
     }
 
-    // MARK: - 0.3.x migration (calm → random)
+    // MARK: - 2.0 migration (business/random removed)
 
-    /// The third mode was renamed from "calm" to "random". KeyboardShortcuts
-    /// persists bindings under "KeyboardShortcuts_<name>" — copy the old
-    /// binding once so the user's shortcut survives the rename.
-    private func migrateLegacyCalmBinding() {
+    /// 1.x had three modes. Their bindings stay in UserDefaults and would keep
+    /// firing if the names were ever bound again — clear them once. If the
+    /// user never set a Dictate shortcut but had a Business one, move it over
+    /// so dictation keeps working without a trip to Settings.
+    private func retireLegacyBindings() {
         let defaults = UserDefaults.standard
-        let oldKey = "KeyboardShortcuts_dictate_calm"
-        let newKey = "KeyboardShortcuts_dictate_random"
-        if defaults.object(forKey: newKey) == nil,
-           let legacy = defaults.object(forKey: oldKey) {
-            defaults.set(legacy, forKey: newKey)
-            defaults.removeObject(forKey: oldKey)
-            NSLog("[ShortcutManager] Migrated calm → random shortcut binding")
+        let flag = "com.voiceflow.desktop.shortcutsMigrated_v2"
+        guard !defaults.bool(forKey: flag) else { return }
+        defaults.set(true, forKey: flag)
+
+        let dictateKey  = "KeyboardShortcuts_dictate_private"
+        let businessKey = "KeyboardShortcuts_dictate_business"
+        if defaults.object(forKey: dictateKey) == nil,
+           let business = defaults.object(forKey: businessKey) {
+            defaults.set(business, forKey: dictateKey)
+            NSLog("[ShortcutManager] Moved Business shortcut to Dictate")
+        }
+        for legacy in [businessKey, "KeyboardShortcuts_dictate_random", "KeyboardShortcuts_dictate_calm"] {
+            defaults.removeObject(forKey: legacy)
         }
     }
 
@@ -64,30 +72,10 @@ final class ShortcutManager {
 
     private func attachHandlers() {
         KeyboardShortcuts.onKeyDown(for: .dictatePrivate) { [weak self] in
-            self?.handler?(.private)
+            self?.handler?(.dictate)
         }
-        KeyboardShortcuts.onKeyDown(for: .dictateBusiness) { [weak self] in
-            self?.handler?(.business)
+        KeyboardShortcuts.onKeyDown(for: .transcribeToggle) { [weak self] in
+            self?.handler?(.transcribe)
         }
-        KeyboardShortcuts.onKeyDown(for: .dictateRandom) { [weak self] in
-            self?.handler?(.random)
-        }
-    }
-
-    // MARK: - Current Combo Strings (for display)
-
-    @MainActor
-    func currentCombos() -> (private: String, business: String, random: String) {
-        return (
-            private:  descriptionFor(.dictatePrivate),
-            business: descriptionFor(.dictateBusiness),
-            random:   descriptionFor(.dictateRandom)
-        )
-    }
-
-    @MainActor
-    private func descriptionFor(_ name: KeyboardShortcuts.Name) -> String {
-        guard let shortcut = KeyboardShortcuts.getShortcut(for: name) else { return "" }
-        return shortcut.description
     }
 }

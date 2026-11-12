@@ -33,9 +33,8 @@ enum SnapshotMode {
         try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
 
         var settings = AppSettings()
-        settings.shortcutPrivate  = "⌥1"
-        settings.shortcutBusiness = "⌥2"
-        settings.shortcutRandom   = "⌥3"
+        settings.shortcutPrivate    = "⌥1"
+        settings.shortcutTranscribe = "⌥2"
 
         var specs: [Spec] = [
             Spec(name: "settings", size: NSSize(width: 580, height: 720),
@@ -101,7 +100,7 @@ enum SnapshotMode {
         let panelStates: [(String, AppState, String?)] = [
             ("panel-idle",      .idle, nil),
             ("panel-needskey",  .needsAPIKey, nil),
-            ("panel-recording", .recording(mode: .business), nil),
+            ("panel-recording", .recording(mode: .dictate), nil),
             ("panel-success",   .success, "Das ist ein Beispieltext, der gerade diktiert und eingefügt wurde."),
             ("panel-fallback",  .successWithRawFallback, "Rohtext nach KI-Ausfall — trotzdem nichts verloren.")
         ]
