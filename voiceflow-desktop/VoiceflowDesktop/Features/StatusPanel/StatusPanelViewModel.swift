@@ -79,4 +79,17 @@ final class StatusPanelViewModel: ObservableObject {
     /// Description of a rescued (failed) recording awaiting retry, e.g.
     /// "Business · 14:32" — nil when there is nothing to retry.
     @Published var rescuedDescription: String?
+    /// Running/processing call (Transcribe mode) — independent of `state`, so a
+    /// dictation can happen while a call is being recorded.
+    @Published var call: CallStatus?
+}
+
+/// What the panel shows for Transcribe mode.
+struct CallStatus: Equatable {
+    enum Phase: Equatable { case recording, processing(done: Int, total: Int) }
+    var phase: Phase
+    var elapsedSeconds: Int
+    var source: String            // "manual" | "teams-auto"
+    var participant: String?
+    var systemAudioMissing: Bool
 }

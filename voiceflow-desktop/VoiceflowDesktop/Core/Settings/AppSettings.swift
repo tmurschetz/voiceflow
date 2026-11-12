@@ -52,6 +52,11 @@ struct AppSettings: Codable, Equatable {
     /// When false, dictations are not written to the local history file.
     var historyEnabled: Bool = true
 
+    // MARK: - Calls (Transcribe mode)
+
+    /// Start/stop the call transcript automatically when Teams uses the microphone.
+    var autoRecordTeamsCalls: Bool = true
+
     // MARK: - Derived
 
     var language: LanguageSelection {
@@ -99,6 +104,7 @@ struct AppSettings: Codable, Equatable {
         outputMode = try c.decodeIfPresent(OutputMode.self, forKey: .outputMode) ?? .insertIntoField
         microphoneDevice = try c.decodeIfPresent(String.self, forKey: .microphoneDevice)
         historyEnabled = try c.decodeIfPresent(Bool.self, forKey: .historyEnabled) ?? true
+        autoRecordTeamsCalls = try c.decodeIfPresent(Bool.self, forKey: .autoRecordTeamsCalls) ?? true
     }
 
 }

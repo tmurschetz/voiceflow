@@ -357,6 +357,68 @@ enum SelfTest {
         }
         check("VP-Bitraten für alle Sample-Raten encoder-gültig", vpAllValid)
 
+        // 18. Transcribe mode (2.0) — pure logic: speaker segmentation on
+        // synthetic two-track audio, Teams debounce, participant guess, export text.
+        print("\n[18] Transcribe — Sprecher-Trennung, Teams-Erkennung, Export")
+        do {
+            // Synthetic call: me 0–2 s and 6–8 s, other side 3–5 s (tone bursts at 16 kHz).
+            func tone(seconds: Double, bursts: [(Double, Double)], url: URL) throws {
+                let rate = 16_000.0
+                let fmt = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+                let settings: [String: Any] = [AVFormatIDKey: Int(kAudioFormatMPEG4AAC), AVSampleRateKey: rate,
+                                               AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 48_000]
+                let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                let n = AVAudioFrameCount(seconds * rate)
+                let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!
+                buf.frameLength = n
+                for i in 0..<Int(n) {
+                    let t = Double(i) / rate
+                    let active = bursts.contains { t >= $0.0 && t < $0.1 }
+                    buf.floatChannelData![0][i] = active ? Float(sin(2 * .pi * 220 * t)) * 0.3 : 0
+                }
+                try file.write(from: buf)
+            }
+            let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vf-segtest-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let mic = dir.appendingPathComponent("mic.m4a"), sys = dir.appendingPathComponent("system.m4a")
+            try tone(seconds: 9, bursts: [(0, 2), (6, 8)], url: mic)
+            try tone(seconds: 9, bursts: [(3, 5)], url: sys)
+            let chunks = CallSegmenter.makeChunks(micURL: mic, systemURL: sys, workDir: dir.appendingPathComponent("chunks"))
+            let pattern = chunks.map { $0.speaker == .me ? "me" : "other" }.joined(separator: ",")
+            check("Zwei Spuren → drei Sprecherwechsel in Reihenfolge (me,other,me)", pattern == "me,other,me",
+                  detail: "war \(pattern) (\(chunks.count) Chunks)")
+            if chunks.count == 3 {
+                check("Zeitstempel plausibel (Gegenseite startet ≈3 s)", abs(chunks[1].start - 3.0) < 0.6,
+                      detail: String(format: "start %.2f", chunks[1].start))
+                let exported = chunks.allSatisfy { ((try? Data(contentsOf: $0.fileURL))?.count ?? 0) > 1200 }
+                check("Chunk-Dateien exportiert", exported)
+            }
+            try? FileManager.default.removeItem(at: dir)
+        } catch {
+            check("Synthetisches Call-Audio erzeugt", false, detail: error.localizedDescription)
+        }
+
+        var deb = TeamsCallDetector.Debouncer(startAfter: 3, stopAfter: 4)
+        var fired: [TeamsCallDetector.Debouncer.Decision] = []
+        for active in [true, true, true, true] { fired.append(deb.tick(callActive: active, recording: false)) }
+        check("Teams-Start nach 3 stabilen Polls, nicht früher, nicht doppelt",
+              fired == [.none, .none, .start, .none])
+        var stopDeb = TeamsCallDetector.Debouncer(startAfter: 3, stopAfter: 4)
+        var stops: [TeamsCallDetector.Debouncer.Decision] = []
+        for active in [false, true, false, false, false, false] { stops.append(stopDeb.tick(callActive: active, recording: true)) }
+        check("Teams-Stop erst nach 4 ruhigen Polls (ein Aussetzer stoppt nicht)",
+              stops == [.none, .none, .none, .none, .none, .stop])
+        check("Teilnehmer-Erkennung aus Teams-Fenstertiteln",
+              TeamsCallDetector.participantGuess(from: ["Chat | Microsoft Teams", "Thomas Boli | Microsoft Teams", "Kalender | Microsoft Teams"]) == "Thomas Boli")
+        let rec = CallStore.Record(id: "t", start: Date(timeIntervalSince1970: 1_700_000_000),
+                                   end: Date(timeIntervalSince1970: 1_700_000_240), source: "manual",
+                                   participant: "Reto Muster", languages: ["de"], status: "done",
+                                   transcript: "[00:00] Du:\nHallo.")
+        let export = CallStore.exportText(rec)
+        check("Export-Text mit Kopfzeile (Datum, Zeit, Teilnehmer)",
+              export.contains("Teilnehmer: Reto Muster") && export.contains("(4 Min)") && export.hasSuffix("Hallo."))
+        check("Zeitstempel-Format", CallTranscriber.stamp(65) == "01:05" && CallTranscriber.stamp(3725) == "1:02:05")
+
         // Summary
         print("\n========== Ergebnis: \(passed) bestanden, \(failed) fehlgeschlagen ==========\n")
         return failed == 0

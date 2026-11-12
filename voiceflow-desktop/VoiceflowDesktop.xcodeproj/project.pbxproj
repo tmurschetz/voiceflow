@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00F9D6CCA1A91FF08BCF2B77 /* CallStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 880C93CBD4314A028790A5D1 /* CallStore.swift */; };
+		0642651EECE91E1D18F85F4B /* TeamsCallDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EA7BB87864C32548F82D92E /* TeamsCallDetector.swift */; };
 		0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */; };
 		08F8F8268F17A6BB579C29A4 /* ShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4AE4459614E88846D38FC3E /* ShortcutManager.swift */; };
 		0EAB16594618F020B2372402 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991838395AC120A56F7F704E /* UpdateService.swift */; };
@@ -18,14 +20,17 @@
 		3E2FDBF71DC5E575CDFA6014 /* ModeProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E79A466290CA8761E783FAE /* ModeProcessor.swift */; };
 		42894528E3434A8A4C139D12 /* SelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE2A4BFB30B525DC9348755 /* SelfTest.swift */; };
 		4300BB805F5629B16A8659C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C203490056D9249E43F16113 /* SettingsView.swift */; };
+		44CBB799B0B1509D669118CD /* CallRecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEE1A2D81FAEA53A8D004DE0 /* CallRecordingService.swift */; };
 		4D4F01FC9ACA55E62478A8A9 /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7563138D9880266FA772ECF /* AppInfo.swift */; };
 		5ECE84548F90AFA7E7C65828 /* PermissionsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A9F2E671A9B5B1A61F6F7B /* PermissionsManager.swift */; };
 		64EBA98BCC8FD1F558D860C5 /* VoiceflowDesktopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */; };
 		71E1D703CE2BABDD76AA419A /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 768F27D8149E7D8144BAD286 /* HistoryStore.swift */; };
 		80681A89C12E9E70ADD966D2 /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D263E9D2AEE6F1A5E6B3B6D7 /* SettingsViewModel.swift */; };
 		81695A95F06F15DC159F53E0 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0C8A93DE5C2E1C773207B17 /* AudioToolbox.framework */; };
+		8EBBF1AD80382B09E79B5666 /* SystemAudioTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA5E50FD3326025A4A6F2CC9 /* SystemAudioTap.swift */; };
 		9625DE809DF647E41737ED3F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1019C2601FF3C184A5A05C /* AppDelegate.swift */; };
 		9BF714C42461818F5C317E3F /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F3DF5D8238CBCF9FFA3DC7 /* MenuBarController.swift */; };
+		9E5E6BD66DE240BEDE69A572 /* CallSegmenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 465B2EFCC53C6BF633A8CACF /* CallSegmenter.swift */; };
 		9FFDDCED614C4AB971B5FDAB /* OutputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80DCE96D78B121E661317F8E /* OutputService.swift */; };
 		ADA6D209374EF59689E10910 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69200CC3359B433509E3E7C5 /* KeychainStore.swift */; };
 		AEB7AF041A80190ACA9F329A /* SnapshotMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */; };
@@ -38,6 +43,7 @@
 		D9524282B76A821FBB3469AC /* AccountTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08734E1F27EC27E1637B0E97 /* AccountTest.swift */; };
 		DCF789D429F2BB9CE7DA60B5 /* SettingsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986870957B3F79F64AE93655 /* SettingsService.swift */; };
 		EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */; };
+		ECD0597E317E07BB902F3A66 /* CallTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 247348219B80D3E20314E8ED /* CallTranscriber.swift */; };
 		FAA5C7B444751315BBA0874D /* SetupWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F64D0DCED6EBBDD39B8A0671 /* SetupWizardView.swift */; };
 		FC8CA7E3D7E29EEF8E17EBC4 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9694776FC320681A74AFC58C /* OpenAIClient.swift */; };
 /* End PBXBuildFile section */
@@ -47,22 +53,28 @@
 		08734E1F27EC27E1637B0E97 /* AccountTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTest.swift; sourceTree = "<group>"; };
 		1278BBE0DFB6124FCF67EED0 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		1D2A68E18859087FDECE2030 /* StatusPanelViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusPanelViewModel.swift; sourceTree = "<group>"; };
+		247348219B80D3E20314E8ED /* CallTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallTranscriber.swift; sourceTree = "<group>"; };
 		2E456E2C7A596699548CB6B3 /* VoiceflowDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceflowDesktopApp.swift; sourceTree = "<group>"; };
 		38BBBC6D256F12F2E950DC9B /* AccountService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountService.swift; sourceTree = "<group>"; };
 		45CB5B9F9FDAE3AACF8FE483 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
+		465B2EFCC53C6BF633A8CACF /* CallSegmenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSegmenter.swift; sourceTree = "<group>"; };
 		4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uninstaller.swift; sourceTree = "<group>"; };
+		4EA7BB87864C32548F82D92E /* TeamsCallDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamsCallDetector.swift; sourceTree = "<group>"; };
 		69200CC3359B433509E3E7C5 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		6E79A466290CA8761E783FAE /* ModeProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeProcessor.swift; sourceTree = "<group>"; };
 		768F27D8149E7D8144BAD286 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
 		79F3DF5D8238CBCF9FFA3DC7 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 		7B022D7F19733E8C6F968A75 /* SnapshotMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotMode.swift; sourceTree = "<group>"; };
 		80DCE96D78B121E661317F8E /* OutputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutputService.swift; sourceTree = "<group>"; };
+		880C93CBD4314A028790A5D1 /* CallStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStore.swift; sourceTree = "<group>"; };
 		88CF41F43ECF611F7DF15B6D /* RecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingService.swift; sourceTree = "<group>"; };
 		9694776FC320681A74AFC58C /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		986870957B3F79F64AE93655 /* SettingsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsService.swift; sourceTree = "<group>"; };
 		991838395AC120A56F7F704E /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		9CE2A4BFB30B525DC9348755 /* SelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTest.swift; sourceTree = "<group>"; };
 		A0C8A93DE5C2E1C773207B17 /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
+		AEE1A2D81FAEA53A8D004DE0 /* CallRecordingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRecordingService.swift; sourceTree = "<group>"; };
+		BA5E50FD3326025A4A6F2CC9 /* SystemAudioTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioTap.swift; sourceTree = "<group>"; };
 		BC106B3EE1B1B5DC57FC7CE9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		C203490056D9249E43F16113 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C7563138D9880266FA772ECF /* AppInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfo.swift; sourceTree = "<group>"; };
@@ -263,6 +275,19 @@
 			path = Recording;
 			sourceTree = "<group>";
 		};
+		C4669DD826FD7EE68975E22E /* Calls */ = {
+			isa = PBXGroup;
+			children = (
+				AEE1A2D81FAEA53A8D004DE0 /* CallRecordingService.swift */,
+				465B2EFCC53C6BF633A8CACF /* CallSegmenter.swift */,
+				880C93CBD4314A028790A5D1 /* CallStore.swift */,
+				247348219B80D3E20314E8ED /* CallTranscriber.swift */,
+				BA5E50FD3326025A4A6F2CC9 /* SystemAudioTap.swift */,
+				4EA7BB87864C32548F82D92E /* TeamsCallDetector.swift */,
+			);
+			path = Calls;
+			sourceTree = "<group>";
+		};
 		C47CB87F36F6007FA6F4C824 /* MenuBar */ = {
 			isa = PBXGroup;
 			children = (
@@ -288,6 +313,7 @@
 				69200CC3359B433509E3E7C5 /* KeychainStore.swift */,
 				4E014B256DE2381E7F15D2F6 /* Uninstaller.swift */,
 				3793386214C992135F07B5EB /* Account */,
+				C4669DD826FD7EE68975E22E /* Calls */,
 				739260BE9C1108D1B9C338E0 /* Logging */,
 				D642D68520AE8AFEEE3FDC37 /* OpenAI */,
 				0324C017D45034FF55213425 /* Output */,
@@ -377,6 +403,10 @@
 				9625DE809DF647E41737ED3F /* AppDelegate.swift in Sources */,
 				4D4F01FC9ACA55E62478A8A9 /* AppInfo.swift in Sources */,
 				BFC7F07FDBE91D0B21E5B491 /* AppSettings.swift in Sources */,
+				44CBB799B0B1509D669118CD /* CallRecordingService.swift in Sources */,
+				9E5E6BD66DE240BEDE69A572 /* CallSegmenter.swift in Sources */,
+				00F9D6CCA1A91FF08BCF2B77 /* CallStore.swift in Sources */,
+				ECD0597E317E07BB902F3A66 /* CallTranscriber.swift in Sources */,
 				D6A966006881517287550B2A /* Config.swift in Sources */,
 				71E1D703CE2BABDD76AA419A /* HistoryStore.swift in Sources */,
 				BF28120A276704A257D10942 /* HistoryView.swift in Sources */,
@@ -397,6 +427,8 @@
 				AEB7AF041A80190ACA9F329A /* SnapshotMode.swift in Sources */,
 				25DEC9E1B465F313472D7944 /* StatusPanelView.swift in Sources */,
 				0777CE5DF1100F079D012FEE /* StatusPanelViewModel.swift in Sources */,
+				8EBBF1AD80382B09E79B5666 /* SystemAudioTap.swift in Sources */,
+				0642651EECE91E1D18F85F4B /* TeamsCallDetector.swift in Sources */,
 				EB540EAED89116210C1D9FDF /* TranscriptionService.swift in Sources */,
 				37AD9CC284EC6920152BD21E /* Uninstaller.swift in Sources */,
 				0EAB16594618F020B2372402 /* UpdateService.swift in Sources */,

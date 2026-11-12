@@ -19,6 +19,7 @@ struct SettingsView: View {
                 GeneralSection(viewModel: viewModel)
                 ModesSection(viewModel: viewModel)
                 VocabularySection(viewModel: viewModel)
+                CallsSection(viewModel: viewModel)
                 LanguageSection(viewModel: viewModel)
                 OutputSection(viewModel: viewModel)
                 PermissionsSection()
@@ -259,6 +260,26 @@ private struct ModeRow: View {
             .padding(.leading, 34)
         }
         .padding(.vertical, 2)
+    }
+}
+
+// MARK: - Section: Calls (Transcribe mode)
+
+private struct CallsSection: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
+    var body: some View {
+        Section {
+            HStack(spacing: 10) {
+                IconBadge(systemName: "phone.badge.waveform.fill", color: .teal)
+                Toggle("Teams-Calls automatisch mitschreiben", isOn: $viewModel.draft.autoRecordTeamsCalls)
+            }
+        } header: {
+            Text("Calls")
+        } footer: {
+            Text("Erkennt, wenn Teams das Mikrofon öffnet, und startet/stoppt die Mitschrift von selbst (beide Seiten). Jederzeit per Shortcut oder im Panel stoppbar. Transkripte bleiben 14 Tage lokal im Verlauf. Hinweis: Informiere deine Gesprächspartner, dass du mitschreibst — in der Schweiz ist das Pflicht (Art. 179ter StGB).")
+                .font(.caption)
+        }
     }
 }
 

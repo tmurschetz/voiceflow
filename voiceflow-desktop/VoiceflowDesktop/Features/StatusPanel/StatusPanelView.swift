@@ -10,6 +10,7 @@ struct StatusPanelView: View {
     var onQuit: () -> Void
     var onRetryRescue: () -> Void = {}
     var onHistory: () -> Void = {}
+    var onCallToggle: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,6 +51,13 @@ struct StatusPanelView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
                 }
+            }
+
+            // Transcribe: running / processing call
+            if let call = viewModel.call {
+                CallStatusView(call: call, onToggle: onCallToggle)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
             }
 
             Divider().padding(.horizontal, 12)
@@ -346,5 +354,55 @@ private struct LastDictationView: View {
                         .fill(.quaternary.opacity(0.4))
                 )
         }
+    }
+}
+
+// MARK: - Call status (Transcribe mode)
+
+private struct CallStatusView: View {
+    let call: CallStatus
+    var onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "phone.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isRecording ? Color.red.gradient : Color.teal.gradient))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.callout.weight(.medium))
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            if isRecording {
+                Button("Stopp") { onToggle() }
+                    .controlSize(.small)
+                    .tint(.red)
+            } else {
+                ProgressView().controlSize(.small)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill((isRecording ? Color.red : Color.teal).opacity(0.09)))
+    }
+
+    private var isRecording: Bool { if case .recording = call.phase { return true }; return false }
+
+    private var title: String {
+        switch call.phase {
+        case .recording: return "Call wird mitgeschrieben · \(String(format: "%d:%02d", call.elapsedSeconds / 60, call.elapsedSeconds % 60))"
+        case .processing(let done, let total): return total > 0 ? "Transkribiere… \(done)/\(total)" : "Transkribiere…"
+        }
+    }
+
+    private var subtitle: String {
+        var parts: [String] = []
+        parts.append(call.source == "teams-auto" ? "Teams erkannt" : "Manuell gestartet")
+        if let p = call.participant, !p.isEmpty { parts.append(p) }
+        if call.systemAudioMissing { parts.append("nur Mikrofon — Systemaudio nicht erlaubt") }
+        return parts.joined(separator: " · ")
     }
 }

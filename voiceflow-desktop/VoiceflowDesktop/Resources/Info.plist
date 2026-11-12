@@ -30,6 +30,8 @@
     <true/>
 
     <!-- Microphone access -->
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>Voiceflow zeichnet im Transcribe-Modus den Systemton auf, damit auch die Gegenseite eines Calls im Transkript erscheint. Die Aufnahme bleibt auf diesem Mac und geht nur zur Transkription an OpenAI.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Voiceflow needs microphone access to record your speech for transcription.</string>
 

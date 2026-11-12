@@ -96,6 +96,16 @@ enum SnapshotMode {
                           view: AnyView(HistoryView(entries: historyFixtures))))
         specs.append(Spec(name: "history-empty", size: NSSize(width: 520, height: 600),
                           view: AnyView(HistoryView(entries: []))))
+        let callFixtures: [CallStore.Record] = [
+            .init(id: "c1", start: Date().addingTimeInterval(-1500), end: Date().addingTimeInterval(-900),
+                  source: "teams-auto", participant: "Thomas Boli", languages: ["de"], status: "done",
+                  transcript: "[00:00] Du:\nGrüezi Thomas, danke für die Zeit. Ich fasse kurz den Stand zusammen.\n\n[00:14] Gegenseite:\nGerne. Für mich ist wichtig, dass die Offerte bis Freitag steht.\n\n[00:31] Du:\nDas kriegen wir hin — Sandra bereitet die Unterlagen vor."),
+            .init(id: "c2", start: Date().addingTimeInterval(-90_000), end: Date().addingTimeInterval(-88_000),
+                  source: "manual", participant: nil, languages: ["de", "en"], status: "failed",
+                  errorMessage: "Keine Sprache erkannt.")
+        ]
+        specs.append(Spec(name: "history-calls", size: NSSize(width: 520, height: 600),
+                          view: AnyView(HistoryView(entries: [], calls: callFixtures, tab: .calls))))
 
         let panelStates: [(String, AppState, String?)] = [
             ("panel-idle",      .idle, nil),
