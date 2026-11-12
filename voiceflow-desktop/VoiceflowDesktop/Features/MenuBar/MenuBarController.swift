@@ -11,6 +11,7 @@ protocol MenuBarControllerDelegate: AnyObject {
     func menuBarDidRequestCheckForUpdates()
     func menuBarDidRequestQuit()
     func menuBarDidRequestRescueRetry()
+    func menuBarDidRequestRescueDiscard()
     func menuBarDidRequestCallToggle()
 }
 
@@ -80,6 +81,9 @@ final class MenuBarController {
             onRetryRescue: { [weak self] in
                 self?.closePopover()
                 self?.delegate?.menuBarDidRequestRescueRetry()
+            },
+            onDiscardRescue: { [weak self] in
+                self?.delegate?.menuBarDidRequestRescueDiscard()
             },
             onHistory: { [weak self] in
                 self?.closePopover()

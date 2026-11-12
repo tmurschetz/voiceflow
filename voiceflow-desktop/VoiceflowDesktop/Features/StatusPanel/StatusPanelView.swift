@@ -9,6 +9,7 @@ struct StatusPanelView: View {
     var onSettings: () -> Void
     var onQuit: () -> Void
     var onRetryRescue: () -> Void = {}
+    var onDiscardRescue: () -> Void = {}
     var onHistory: () -> Void = {}
     var onCallToggle: () -> Void = {}
 
@@ -85,6 +86,14 @@ struct StatusPanelView: View {
                     Spacer()
                     Button("Erneut versuchen") { onRetryRescue() }
                         .controlSize(.small)
+                    Button {
+                        onDiscardRescue()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Gerettete Aufnahme verwerfen")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)

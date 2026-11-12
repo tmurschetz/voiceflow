@@ -698,6 +698,14 @@ extension AppDelegate: MenuBarControllerDelegate {
 
     func menuBarDidRequestCallToggle() { toggleCallTranscription() }
 
+    /// ✕ in the panel: drop the rescued recording the user doesn't want.
+    func menuBarDidRequestRescueDiscard() {
+        if let rescued = RescueStore.shared.latest {
+            RescueStore.shared.delete(rescued)
+        }
+        menuBarController?.refreshRescueState()
+    }
+
     func menuBarDidRequestRescueRetry() {
         Task { await retryRescuedDictation() }
     }
