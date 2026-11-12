@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsService.migrateTranscribeModelToWhisperIfNeeded()
         settingsService.migrateTranscribeModelToGptTranscribeIfNeeded()
         settingsService.migrateTextModelIfNeeded()
+        settingsService.migrateDictateInstructionForV2IfNeeded()
 
         // Load local settings + bind shortcuts immediately — no network needed.
         let settings = settingsService.loadSettings()
