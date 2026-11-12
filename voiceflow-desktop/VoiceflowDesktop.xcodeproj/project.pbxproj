@@ -490,7 +490,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = GD42PF6FBY;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -555,7 +555,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoiceflowDesktop/Resources/VoiceflowDesktop.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = GD42PF6FBY;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -635,7 +635,7 @@
 			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.0.0;
+				minimumVersion = 3.1.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
