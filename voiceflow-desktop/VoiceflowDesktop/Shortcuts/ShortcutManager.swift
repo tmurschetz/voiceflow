@@ -15,6 +15,10 @@ extension KeyboardShortcuts.Name {
 ///
 /// Bindings are persisted by the KeyboardShortcuts framework in UserDefaults;
 /// AppSettings stores only the display strings shown in the status panel.
+///
+/// KeyboardShortcuts 3.x isolates its API to the main actor; all callers
+/// (AppDelegate, SettingsViewModel, SetupWizard) already run there.
+@MainActor
 final class ShortcutManager {
 
     static let shared = ShortcutManager()

@@ -10,7 +10,7 @@ options:
 packages:
   KeyboardShortcuts:
     url: https://github.com/sindresorhus/KeyboardShortcuts
-    from: "2.0.0"
+    from: "3.1.0"   # 3.1.0 fixes the recorder on macOS 26/27 (sindresorhus/KeyboardShortcuts#241)
   # Sparkle (auto-update) is a Phase 2 feature — requires Developer ID + notarization.
   # Re-enable once the appcast server is live and the app is properly signed.
 
@@ -18,7 +18,7 @@ settings:
   base:
     PRODUCT_BUNDLE_IDENTIFIER: com.voiceflow.desktop
     MARKETING_VERSION: "2.0.0"
-    CURRENT_PROJECT_VERSION: "30"
+    CURRENT_PROJECT_VERSION: "31"
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
     CODE_SIGN_STYLE: Automatic
