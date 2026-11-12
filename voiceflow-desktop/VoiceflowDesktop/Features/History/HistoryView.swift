@@ -12,16 +12,32 @@ import AppKit
 struct HistoryView: View {
 
     /// nil → load from HistoryStore.shared on appear (normal app use).
+    enum Tab: String, CaseIterable { case dictations = "Diktate", calls = "Calls" }
+
     private let injectedEntries: [HistoryStore.Entry]?
+    private let injectedCalls: [CallStore.Record]?
     private let historyEnabled: Bool
 
     @State private var entries: [HistoryStore.Entry] = []
+    @State private var calls: [CallStore.Record] = []
     @State private var query = ""
     @State private var confirmClear = false
+    @State private var tab: Tab
 
-    init(entries: [HistoryStore.Entry]? = nil, historyEnabled: Bool = true) {
+    init(entries: [HistoryStore.Entry]? = nil, calls: [CallStore.Record]? = nil,
+         historyEnabled: Bool = true, tab: Tab = .dictations) {
         self.injectedEntries = entries
+        self.injectedCalls = calls
         self.historyEnabled = historyEnabled
+        _tab = State(initialValue: tab)
+    }
+
+    private var filteredCalls: [CallStore.Record] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return calls }
+        return calls.filter {
+            $0.transcript.lowercased().contains(q) || ($0.participant ?? "").lowercased().contains(q)
+        }
     }
 
     private var filtered: [HistoryStore.Entry] {
@@ -39,11 +55,35 @@ struct HistoryView: View {
             header
             Divider()
 
-            if !historyEnabled {
+            Picker("", selection: $tab) {
+                ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+
+            if tab == .dictations && !historyEnabled {
                 disabledHint
             }
 
-            if filtered.isEmpty {
+            if tab == .calls {
+                if filteredCalls.isEmpty {
+                    callsEmptyState
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(filteredCalls) { call in
+                                CallRow(record: call) {
+                                    CallStore.shared.delete(id: call.id)
+                                    calls.removeAll { $0.id == call.id }
+                                }
+                            }
+                        }
+                        .padding(14)
+                    }
+                }
+            } else if filtered.isEmpty {
                 emptyState
             } else {
                 ScrollView {
@@ -57,12 +97,13 @@ struct HistoryView: View {
             }
 
             Divider()
-            footer
+            if tab == .calls { callsFooter } else { footer }
         }
         .frame(width: 520, height: 600)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             entries = injectedEntries ?? HistoryStore.shared.recent(limit: 1000)
+            calls = injectedCalls ?? CallStore.shared.all()
         }
     }
 
@@ -139,6 +180,44 @@ struct HistoryView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private var callsEmptyState: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: query.isEmpty ? "phone.badge.waveform" : "magnifyingglass")
+                .font(.system(size: 34, weight: .light))
+                .foregroundStyle(.quaternary)
+            Text(query.isEmpty ? "Noch keine Call-Transkripte" : "Keine Treffer für «\(query)»")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            if query.isEmpty {
+                Text("Transcribe-Shortcut drücken oder einen Teams-Call starten — die Mitschrift landet hier und bleibt 14 Tage.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var callsFooter: some View {
+        HStack(spacing: 12) {
+            Text(calls.count == 1 ? "1 Call" : "\(calls.count) Calls")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("· werden nach \(CallStore.retentionDays) Tagen automatisch gelöscht")
+                .font(.caption).foregroundStyle(.tertiary)
+            Button("Im Finder zeigen") {
+                NSWorkspace.shared.activateFileViewerSelecting([CallStore.shared.baseURL])
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
     // MARK: - Footer
 
     private var footer: some View {
@@ -195,10 +274,9 @@ private struct HistoryRow: View {
 
     private var modeColor: Color {
         switch mode {
-        case .private:  return .blue
-        case .business: return .indigo
-        case .random:   return .pink
-        case .none:     return .gray
+        case .dictate:    return .blue
+        case .transcribe: return .teal
+        case .none:       return .gray   // 1.x "business"/"random" entries
         }
     }
 
@@ -287,5 +365,87 @@ private struct HistoryRow: View {
         if Calendar.current.isDateInYesterday(date) { return "Gestern, \(time)" }
         let day = date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year())
         return "\(day), \(time)"
+    }
+}
+
+// MARK: - Call row
+
+private struct CallRow: View {
+    let record: CallStore.Record
+    var onDelete: () -> Void
+    @State private var expanded = false
+    @State private var copied = false
+    @State private var confirmDelete = false
+
+    private var timeRange: String {
+        let tf = DateFormatter(); tf.dateFormat = "HH:mm"
+        return "\(tf.string(from: record.start))–\(tf.string(from: record.end))"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 20, height: 20)
+                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color.teal.gradient))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(record.participant ?? "Call")
+                        .font(.callout.weight(.semibold))
+                    Text("\(HistoryRow.timeLabel(record.start).components(separatedBy: ",").first ?? ""), \(timeRange) · \(max(1, record.durationSeconds / 60)) Min"
+                         + (record.source == "teams-auto" ? " · Teams" : "")
+                         + (record.languages.isEmpty ? "" : " · \(record.languages.joined(separator: "+"))"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if record.status == "processing" {
+                    ProgressView().controlSize(.small)
+                } else if record.status == "failed" {
+                    Label(record.errorMessage ?? "Fehlgeschlagen", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption2).foregroundStyle(.orange).lineLimit(1)
+                } else {
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(CallStore.exportText(record), forType: .string)
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                    } label: {
+                        Label(copied ? "Kopiert" : "Kopieren", systemImage: copied ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(copied ? .green : .secondary)
+                }
+                Button {
+                    confirmDelete = true
+                } label: {
+                    Image(systemName: "trash").font(.caption2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+                .confirmationDialog("Diesen Call löschen?", isPresented: $confirmDelete) {
+                    Button("Löschen", role: .destructive) { onDelete() }
+                    Button("Abbrechen", role: .cancel) {}
+                }
+            }
+
+            if !record.transcript.isEmpty {
+                Text(record.transcript)
+                    .font(.callout)
+                    .lineLimit(expanded ? nil : 4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } }
+            }
+            if record.systemAudioMissing {
+                Label("Nur dein Mikrofon — Systemaudio war nicht erlaubt", systemImage: "speaker.slash")
+                    .font(.caption2).foregroundStyle(.orange)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(.quaternary.opacity(0.35)))
     }
 }

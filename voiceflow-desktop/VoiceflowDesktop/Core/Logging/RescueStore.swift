@@ -73,8 +73,9 @@ final class RescueStore {
             // <epoch>_<mode>.<ext>
             let parts = url.deletingPathExtension().lastPathComponent.split(separator: "_")
             guard parts.count == 2,
-                  let epoch = TimeInterval(parts[0]),
-                  let mode = ProcessingMode(rawValue: String(parts[1])) else { return nil }
+                  let epoch = TimeInterval(parts[0]) else { return nil }
+            // 1.x files named *_business / *_random stay retryable as dictations.
+            let mode = ProcessingMode(rawValue: String(parts[1])) ?? .dictate
             // Self-heal: drop any empty/too-short rescued file (e.g. one stuck
             // from before this guard existed) so it can't sit in the panel.
             let size = (try? fm.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0

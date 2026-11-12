@@ -86,6 +86,8 @@ final class OpenAIClient {
 
     struct Transcription {
         let text: String
+        /// Detected languages (ISO 639-1), reported by gpt-transcribe; empty otherwise.
+        let languages: [String]
     }
 
     /// Transcribes the audio file with the user-selected model.
@@ -95,21 +97,21 @@ final class OpenAIClient {
     /// user's choice in Settings.
     func transcribe(audioData: Data, fileExt: String, languageCode: String?,
                     model: String, apiKey: String, prompt: String? = nil,
-                    audioSeconds: Int = 0) async throws -> Transcription {
+                    keywords: String? = nil, audioSeconds: Int = 0) async throws -> Transcription {
         do {
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
                                             languageCode: languageCode, model: model, apiKey: apiKey,
-                                            prompt: prompt, audioSeconds: audioSeconds)
+                                            prompt: prompt, keywords: keywords, audioSeconds: audioSeconds)
         } catch let OpenAIError.httpError(code, message) where model != "whisper-1"
                     && (code == 400 || code == 403 || code == 404)
                     && Self.isModelOrDurationIssue(message) {
             // Account lacks the model, OR the audio exceeds the model's duration
-            // cap (gpt-4o-transcribe: 25 min) — whisper-1 has no duration cap.
+            // cap — whisper-1 (available until 2027-02-26) is the safety net.
             NSLog("[OpenAIClient] %@ rejected (%d: %@) — falling back to whisper-1 for this call",
                   model, code, String(message.prefix(80)))
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
                                             languageCode: languageCode, model: "whisper-1", apiKey: apiKey,
-                                            prompt: prompt, audioSeconds: audioSeconds)
+                                            prompt: prompt, keywords: nil, audioSeconds: audioSeconds)
         }
     }
 
@@ -123,7 +125,8 @@ final class OpenAIClient {
 
     private func transcribeOnce(audioData: Data, fileExt: String, languageCode: String?,
                                 model: String, apiKey: String, prompt: String? = nil,
-                                audioSeconds: Int = 0) async throws -> Transcription {
+                                keywords: String? = nil, audioSeconds: Int = 0) async throws -> Transcription {
+        let isGptTranscribe = model.hasPrefix("gpt-transcribe")
         let boundary = "VF-\(UUID().uuidString)"
         let mimeType = fileExt == "m4a" ? "audio/m4a" : "audio/x-caf"
 
@@ -132,12 +135,18 @@ final class OpenAIClient {
         // Fast server path: plain JSON, no timestamps/verbose metadata.
         body.appendFormField(name: "response_format", value: "json", boundary: boundary)
         if let languageCode {
-            body.appendFormField(name: "language", value: languageCode, boundary: boundary)
+            // gpt-transcribe replaced the singular `language` with `languages[]`.
+            body.appendFormField(name: isGptTranscribe ? "languages[]" : "language",
+                                 value: languageCode, boundary: boundary)
         }
-        // Recognition bias: nudges spelling/punctuation and feeds the user's
-        // custom vocabulary so names/terms are written correctly, not guessed.
+        // Recognition bias: a short style hint (punctuation, dates) …
         if let prompt, !prompt.isEmpty {
             body.appendFormField(name: "prompt", value: prompt, boundary: boundary)
+        }
+        // … and the user's dictionary — natively as `keywords` on gpt-transcribe
+        // (whisper-1 gets it folded into the prompt instead).
+        if isGptTranscribe, let keywords, !keywords.isEmpty {
+            body.appendFormField(name: "keywords", value: keywords, boundary: boundary)
         }
         body.appendFilePart(name: "file", filename: "audio.\(fileExt)", mimeType: mimeType,
                             data: audioData, boundary: boundary)
@@ -161,9 +170,11 @@ final class OpenAIClient {
         NSLog("[VF-Transcribe] %.2fs model=%@ upload=%dKB", Date().timeIntervalSince(started),
               model, audioData.count / 1024)
 
-        struct Response: Decodable { let text: String }
+        struct Lang: Decodable { let code: String }
+        struct Response: Decodable { let text: String; let languages: [Lang]? }
         let decoded = try JSONDecoder().decode(Response.self, from: data)
-        return Transcription(text: decoded.text)
+        return Transcription(text: decoded.text,
+                             languages: (decoded.languages ?? []).map(\.code))
     }
 
     // MARK: - Chat (tone-of-voice rewriting)

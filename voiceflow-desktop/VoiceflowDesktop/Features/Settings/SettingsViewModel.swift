@@ -125,9 +125,8 @@ final class SettingsViewModel: ObservableObject {
 
     /// Mirrors the framework-persisted bindings into `draft` for display/persistence.
     private func syncShortcutsFromRecorder() {
-        draft.shortcutPrivate  = shortcutString(for: .dictatePrivate)
-        draft.shortcutBusiness = shortcutString(for: .dictateBusiness)
-        draft.shortcutRandom   = shortcutString(for: .dictateRandom)
+        draft.shortcutPrivate    = shortcutString(for: .dictatePrivate)
+        draft.shortcutTranscribe = shortcutString(for: .transcribeToggle)
     }
 
     private func shortcutString(for name: KeyboardShortcuts.Name) -> String {

@@ -11,6 +11,8 @@ protocol MenuBarControllerDelegate: AnyObject {
     func menuBarDidRequestCheckForUpdates()
     func menuBarDidRequestQuit()
     func menuBarDidRequestRescueRetry()
+    func menuBarDidRequestRescueDiscard()
+    func menuBarDidRequestCallToggle()
 }
 
 /// Owns the NSStatusItem (menu bar icon) and the popover panel.
@@ -80,9 +82,15 @@ final class MenuBarController {
                 self?.closePopover()
                 self?.delegate?.menuBarDidRequestRescueRetry()
             },
+            onDiscardRescue: { [weak self] in
+                self?.delegate?.menuBarDidRequestRescueDiscard()
+            },
             onHistory: { [weak self] in
                 self?.closePopover()
                 self?.delegate?.menuBarDidRequestHistory()
+            },
+            onCallToggle: { [weak self] in
+                self?.delegate?.menuBarDidRequestCallToggle()
             }
         )
 
@@ -96,7 +104,10 @@ final class MenuBarController {
 
     // MARK: - State Updates
 
+    private var currentState: AppState = .idle
+
     func update(state: AppState, settings: AppSettings? = nil) {
+        currentState = state
         statusPanelVM.state = state
         if let settings { statusPanelVM.settings = settings }
         updateIcon(for: state)
@@ -112,6 +123,13 @@ final class MenuBarController {
         if case .recording = state { /* keep counting */ } else {
             statusPanelVM.recordingSeconds = 0
         }
+    }
+
+    /// Transcribe mode: shows/clears the call block and tints the icon while a
+    /// call is recorded (dictation state keeps working underneath).
+    func setCall(_ call: CallStatus?) {
+        statusPanelVM.call = call
+        updateIcon(for: currentState)
     }
 
     /// Records the most recent dictation so the panel can show it with a copy button.
@@ -165,8 +183,16 @@ final class MenuBarController {
         guard let button = statusItem?.button else { return }
         switch state {
         case .idle:
-            button.image = Self.brandIdleImage()
-            button.contentTintColor = nil
+            if let call = statusPanelVM.call {
+                let recording: Bool = { if case .recording = call.phase { return true }; return false }()
+                button.image = NSImage(systemSymbolName: recording ? "phone.fill" : "phone.arrow.down.left.fill",
+                                       accessibilityDescription: "Voiceflow — Call")
+                button.image?.isTemplate = false
+                button.contentTintColor = recording ? .systemRed : .systemTeal
+            } else {
+                button.image = Self.brandIdleImage()
+                button.contentTintColor = nil
+            }
         case .needsAPIKey:
             button.image = NSImage(systemSymbolName: "key.fill",
                                    accessibilityDescription: "Voiceflow — API-Key fehlt")
@@ -251,6 +277,14 @@ final class MenuBarController {
         setupItem.target = self
         menu.addItem(setupItem)
 
+        let callItem = NSMenuItem(
+            title: statusPanelVM.call == nil ? "Call-Mitschrift starten" : "Call-Mitschrift stoppen",
+            action: #selector(handleCallToggle),
+            keyEquivalent: ""
+        )
+        callItem.target = self
+        menu.addItem(callItem)
+
         let historyItem = NSMenuItem(
             title: "Verlauf öffnen",
             action: #selector(handleHistory),
@@ -290,6 +324,7 @@ final class MenuBarController {
     @objc private func handleSettings()        { delegate?.menuBarDidRequestSettings() }
     @objc private func handleSetupWizard()     { delegate?.menuBarDidRequestSetupWizard() }
     @objc private func handleHistory()         { delegate?.menuBarDidRequestHistory() }
+    @objc private func handleCallToggle()      { delegate?.menuBarDidRequestCallToggle() }
     @objc private func handleQuit()            { delegate?.menuBarDidRequestQuit() }
 
     // MARK: - Cleanup

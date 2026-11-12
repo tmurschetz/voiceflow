@@ -41,6 +41,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var updateTimer: Timer?
 
+    // MARK: - Transcribe mode (calls)
+
+    let callService = CallRecordingService()
+    private let callTranscriber = CallTranscriber()
+    private var callTimer: Timer?
+    private var teamsTimer: Timer?
+    private var teamsDebouncer = TeamsCallDetector.Debouncer()
+    /// Set when the user stops a Teams call manually: no auto-restart until
+    /// Teams has released the microphone (i.e. the call really ended).
+    private var suppressTeamsAutoUntilIdle = false
+    private var callStartTitles: Set<String> = []
+
     // MARK: - Lifecycle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -68,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // One-time: upgrade users still on the old, less accurate default model.
         settingsService.migrateTranscribeModelIfNeeded()
         settingsService.migrateTranscribeModelToWhisperIfNeeded()
+        settingsService.migrateTranscribeModelToGptTranscribeIfNeeded()
         settingsService.migrateTextModelIfNeeded()
 
         // Load local settings + bind shortcuts immediately — no network needed.
@@ -111,6 +124,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AccountService.shared.startPolling()
         }
 
+        // Transcribe mode: expire old call transcripts and watch Teams.
+        let purged = CallStore.shared.purgeExpired()
+        if purged > 0 { NSLog("[VF-Call] purged %d expired call transcripts", purged) }
+        startTeamsMonitor()
+
         // Auto-update: check shortly after launch, then periodically (internally
         // throttled to ~once a day). Updates come from the app's public GitHub
         // releases — see UpdateService.
@@ -143,7 +161,185 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Dictation Pipeline
 
     func handleShortcutTriggered(mode: ProcessingMode) {
-        Task { await runDictationPipeline(mode: mode) }
+        switch mode {
+        case .dictate:
+            Task { await runDictationPipeline(mode: mode) }
+        case .transcribe:
+            toggleCallTranscription()
+        }
+    }
+
+    // MARK: - Transcribe mode (calls)
+
+    /// Shortcut / menu / panel: start a call transcript, or stop the running one.
+    private func toggleCallTranscription() {
+        if callService.isRecording {
+            if callService.session?.source == "teams-auto" { suppressTeamsAutoUntilIdle = true }
+            Task { await stopCallAndProcess() }
+        } else {
+            startCall(source: "manual")
+        }
+    }
+
+    private func startCall(source: String) {
+        guard KeychainStore.hasAPIKey else { showOnboardingWindow(); return }
+        guard !callService.isRecording else { return }
+        do {
+            try callService.start(folderBase: CallStore.shared.baseURL, source: source)
+        } catch {
+            NSLog("[VF-Call] start failed: %@", String(describing: error))
+            showHUD("Call-Mitschrift konnte nicht starten", detail: error.localizedDescription)
+            return
+        }
+        callStartTitles = Set(TeamsCallDetector.teamsWindowTitles())
+        callStartTitles.forEach { callService.noteParticipantHint($0) }
+        publishCallStatus()
+        callTimer?.invalidate()
+        callTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.callService.elapsedSeconds % 60 == 0 {
+                    TeamsCallDetector.teamsWindowTitles().forEach { self.callService.noteParticipantHint($0) }
+                }
+                self.publishCallStatus()
+            }
+        }
+        showHUD(source == "teams-auto" ? "Teams-Call erkannt — Mitschrift läuft" : "Call-Mitschrift gestartet",
+                detail: callService.systemAudioUnavailable
+                    ? "Nur Mikrofon: Systemaudio-Berechtigung fehlt (Systemeinstellungen → Datenschutz → Bildschirm- & Systemaudio-Aufnahme)."
+                    : "Beide Seiten werden aufgezeichnet. Stopp: Shortcut, Panel oder Menü.")
+    }
+
+    private func publishCallStatus() {
+        guard let s = callService.session else { menuBarController?.setCall(nil); return }
+        menuBarController?.setCall(CallStatus(
+            phase: .recording,
+            elapsedSeconds: callService.elapsedSeconds,
+            source: s.source,
+            participant: TeamsCallDetector.participantGuess(from: s.participantHints),
+            systemAudioMissing: callService.systemAudioUnavailable))
+    }
+
+    private func stopCallAndProcess() async {
+        callTimer?.invalidate(); callTimer = nil
+        guard let session = callService.stop() else { menuBarController?.setCall(nil); return }
+        let settings = settingsService.currentSettings
+        let participant = TeamsCallDetector.participantGuess(from: session.participantHints)
+        var record = CallStore.Record(
+            id: session.id, start: session.startedAt, end: Date(), source: session.source,
+            participant: participant, hints: Array(session.participantHints).sorted(),
+            status: "processing", systemAudioMissing: callService.systemAudioUnavailable)
+        CallStore.shared.upsert(record)
+        menuBarController?.setCall(CallStatus(phase: .processing(done: 0, total: 0),
+                                              elapsedSeconds: record.durationSeconds, source: session.source,
+                                              participant: participant,
+                                              systemAudioMissing: record.systemAudioMissing))
+
+        // Segment on a background thread (PCM decoding of two tracks), then transcribe.
+        let micURL = session.micURL, sysURL = session.systemURL
+        let workDir = session.folder.appendingPathComponent("chunks", isDirectory: true)
+        let chunks = await Task.detached(priority: .userInitiated) {
+            CallSegmenter.makeChunks(micURL: micURL, systemURL: sysURL, workDir: workDir)
+        }.value
+        NSLog("[VF-Call] %d chunks from %ds call", chunks.count, record.durationSeconds)
+
+        let output = await callTranscriber.transcribe(
+            chunks: chunks, vocabulary: settings?.customVocabulary ?? "",
+            model: settings?.transcribeModel ?? TranscribeModel.recommended.id,
+            progress: { [weak self] done, total in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.menuBarController?.setCall(CallStatus(
+                        phase: .processing(done: done, total: total),
+                        elapsedSeconds: record.durationSeconds, source: session.source,
+                        participant: participant, systemAudioMissing: record.systemAudioMissing))
+                }
+            })
+        try? FileManager.default.removeItem(at: workDir)
+
+        record.transcript = output.transcript
+        record.languages = output.languages
+        if output.transcript.isEmpty {
+            record.status = "failed"
+            record.errorMessage = chunks.isEmpty ? "Keine Sprache erkannt." : "Transkription fehlgeschlagen (\(output.failedChunks)/\(output.chunkCount) Abschnitte)."
+        } else {
+            record.status = "done"
+        }
+        CallStore.shared.upsert(record)
+        menuBarController?.setCall(nil)
+
+        let mins = max(1, record.durationSeconds / 60)
+        if record.status == "done" {
+            showHUD("Call-Transkript bereit (\(mins) Min)",
+                    detail: (participant.map { "Mit \($0) · " } ?? "") + "Im Verlauf → Calls kopieren.")
+        } else {
+            showHUD("Call-Transkript unvollständig", detail: record.errorMessage ?? "")
+        }
+    }
+
+    // MARK: Teams automation
+
+    private func startTeamsMonitor() {
+        teamsTimer?.invalidate()
+        teamsTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollTeams() }
+        }
+    }
+
+    private func pollTeams() {
+        guard settingsService.currentSettings?.autoRecordTeamsCalls ?? true else { return }
+        let teamsActive = TeamsCallDetector.teamsIsUsingMicrophone()
+        if !teamsActive { suppressTeamsAutoUntilIdle = false }
+        let recordingTeamsCall = callService.isRecording && callService.session?.source == "teams-auto"
+        switch teamsDebouncer.tick(callActive: teamsActive, recording: recordingTeamsCall) {
+        case .start:
+            guard !callService.isRecording, !suppressTeamsAutoUntilIdle, !recordingService.isRecording else { return }
+            showConsentReminderOnce()
+            startCall(source: "teams-auto")
+        case .stop:
+            Task { await stopCallAndProcess() }
+        case .none:
+            break
+        }
+    }
+
+    private func showConsentReminderOnce() {
+        let key = "com.voiceflow.desktop.callConsentNoticeShown"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Voiceflow schreibt ab jetzt deine Teams-Calls mit"
+        alert.informativeText = "Erinnerung (einmalig): Sag deinen Gesprächspartnern zu Beginn, dass du eine Mitschrift machst — in der Schweiz ist das Aufzeichnen ohne Wissen der Beteiligten strafbar (Art. 179ter StGB). Die Automatik lässt sich in den Einstellungen unter «Calls» abschalten."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Verstanden")
+        alert.runModal()
+    }
+
+    // MARK: HUD (non-blocking notice, top-right)
+
+    private var hudWindow: NSPanel?
+
+    private func showHUD(_ title: String, detail: String) {
+        hudWindow?.orderOut(nil)
+        let view = NSHostingView(rootView: HUDView(title: title, detail: detail))
+        let size = view.fittingSize
+        guard let screen = NSScreen.main else { return }
+        let origin = NSPoint(x: screen.visibleFrame.maxX - size.width - 16,
+                             y: screen.visibleFrame.maxY - size.height - 16)
+        let panel = NSPanel(contentRect: NSRect(origin: origin, size: size),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.level = .statusBar
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.contentView = view
+        panel.orderFrontRegardless()
+        hudWindow = panel
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak panel] in
+            panel?.orderOut(nil)
+            if self?.hudWindow === panel { self?.hudWindow = nil }
+        }
     }
 
     private func runDictationPipeline(mode: ProcessingMode) async {
@@ -500,7 +696,44 @@ extension AppDelegate: MenuBarControllerDelegate {
 
     func menuBarDidRequestQuit() { NSApp.terminate(nil) }
 
+    func menuBarDidRequestCallToggle() { toggleCallTranscription() }
+
+    /// ✕ in the panel: drop the rescued recording the user doesn't want.
+    func menuBarDidRequestRescueDiscard() {
+        if let rescued = RescueStore.shared.latest {
+            RescueStore.shared.delete(rescued)
+        }
+        menuBarController?.refreshRescueState()
+    }
+
     func menuBarDidRequestRescueRetry() {
         Task { await retryRescuedDictation() }
+    }
+}
+
+
+// MARK: - HUD view
+
+private struct HUDView: View {
+    let title: String
+    let detail: String
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "phone.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.teal.gradient))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.callout.weight(.semibold))
+                if !detail.isEmpty {
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 340, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

@@ -20,6 +20,53 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
+## [2.0.0] — 2026-11-12 (in progress)
+
+### Two modes instead of three
+- **Dictate** (was Privat): ChatGPT-style — fillers out, punctuation in, mishearings
+  fixed, otherwise verbatim. Pastes into the active field.
+- **Transcribe** (new): records Teams & other calls with **both sides** — your
+  microphone and the system audio as separate tracks — and files a time-stamped,
+  speaker-labelled transcript ("Du:" / "Gegenseite:") in the history. Never pastes.
+- Business and Random removed. 1.x bindings are retired automatically (a Business
+  shortcut becomes the Dictate shortcut if none was set); old history entries stay
+  readable.
+
+### Transcribe mode
+- **Teams automation:** detects when Teams opens the microphone (Core Audio process
+  state, macOS 14.2+) and starts/stops the transcript by itself, with debounce.
+  Manual start/stop via shortcut, status panel or menu overrides it; a one-time
+  consent reminder appears on the first automatic start (Art. 179ter StGB).
+- **Speaker separation without a diarisation model:** energy-based voice activity
+  per track → natural speech turns → ≤2-minute chunks transcribed individually and
+  interleaved chronologically. Echo of the far side through speakers is suppressed.
+  This also sidesteps the 25 MB upload cap for hour-long calls.
+- **Participant & time:** Teams window titles are sampled during the call; the
+  transcript header carries date, time range, duration, participant and languages.
+- **Call history:** new "Calls" tab in the history window — copy (CRM/Copilot-ready
+  text), expand, delete; automatic purge after 14 days. Stored under
+  Application Support/Voiceflow/Calls/<id>/ (mic.m4a, system.m4a, transcript.txt).
+- Requires the "System Audio Recording" permission (asked on first call); without
+  it the call is recorded microphone-only and marked as such.
+
+### Model migration
+- OpenAI deprecated `whisper-1`, `gpt-4o-transcribe`, `-mini` and `-diarize`
+  (shutdown 2027-02-26). Default is now **`gpt-transcribe`** — verified on the
+  real 20-minute pause-heavy dictation (10 894 chars, complete) — with the
+  dictionary as native `keywords`, `languages[]`, and detected languages reported.
+  One-time migration; whisper-1 stays as emergency fallback until shutdown.
+
+### Fixed
+- Shortcut recorder in Settings/Setup accepted no key presses on macOS 26/27 —
+  KeyboardShortcuts 2.4.0 bug (sindresorhus/KeyboardShortcuts#241). Upgraded to
+  3.1.0, which fixes the recorder. Transcribe shortcut can now be set.
+
+### Tests
+- Selftest 59 checks incl. [18]: two-track speaker segmentation on synthetic audio,
+  Teams debounce, participant guess, export text, timestamps.
+
+---
+
 ## [1.1.2] — 2026-08-12
 
 ### The quality-parity release ("wie ChatGPT")

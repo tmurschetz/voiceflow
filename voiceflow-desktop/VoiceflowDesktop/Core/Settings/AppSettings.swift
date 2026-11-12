@@ -9,16 +9,15 @@ struct AppSettings: Codable, Equatable {
 
     // MARK: - Shortcuts (display strings; bindings live in KeyboardShortcuts)
 
-    var shortcutPrivate:  String = ""
-    var shortcutBusiness: String = ""
-    var shortcutRandom:   String = ""
+    /// Dictate (field name kept from 1.x so stored settings decode unchanged).
+    var shortcutPrivate:    String = ""
+    /// Transcribe — start/stop a call recording.
+    var shortcutTranscribe: String = ""
 
-    // MARK: - Per-mode custom instructions
-    // Free-text personalisation appended to the mode's system prompt.
+    // MARK: - Custom instruction (Dictate only)
+    // Free-text personalisation appended to the cleanup prompt.
 
-    var instructionPrivate:  String = ""
-    var instructionBusiness: String = ""
-    var instructionRandom:   String = ""
+    var instructionPrivate: String = ""
 
     // MARK: - Models
 
@@ -53,35 +52,39 @@ struct AppSettings: Codable, Equatable {
     /// When false, dictations are not written to the local history file.
     var historyEnabled: Bool = true
 
+    // MARK: - Calls (Transcribe mode)
+
+    /// Start/stop the call transcript automatically when Teams uses the microphone.
+    var autoRecordTeamsCalls: Bool = true
+
     // MARK: - Derived
 
     var language: LanguageSelection {
         autoDetectLanguage ? .autoDetect : .manual(manualLanguageOverride)
     }
 
-    /// Custom instruction for a given mode.
+    /// Custom instruction for a given mode (only Dictate has one).
     func instruction(for mode: ProcessingMode) -> String {
         switch mode {
-        case .private:  return instructionPrivate
-        case .business: return instructionBusiness
-        case .random:   return instructionRandom
+        case .dictate:    return instructionPrivate
+        case .transcribe: return ""
         }
     }
 
     // MARK: - Validation
 
     var shortcutsAreValid: Bool {
-        let nonEmpty = [shortcutPrivate, shortcutBusiness, shortcutRandom]
+        let nonEmpty = [shortcutPrivate, shortcutTranscribe]
             .filter { !$0.isEmpty }
         return nonEmpty.count == Set(nonEmpty).count
     }
 
     var shortcutValidationError: String? {
-        shortcutsAreValid ? nil : "Zwei oder mehr Shortcuts sind identisch. Jeder muss eindeutig sein."
+        shortcutsAreValid ? nil : "Beide Shortcuts sind identisch. Jeder muss eindeutig sein."
     }
 
     var shortcutsAreAllEmpty: Bool {
-        shortcutPrivate.isEmpty && shortcutBusiness.isEmpty && shortcutRandom.isEmpty
+        shortcutPrivate.isEmpty && shortcutTranscribe.isEmpty
     }
 
     // MARK: - Tolerant decoding
@@ -90,14 +93,9 @@ struct AppSettings: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        shortcutPrivate  = try c.decodeIfPresent(String.self, forKey: .shortcutPrivate)  ?? ""
-        shortcutBusiness = try c.decodeIfPresent(String.self, forKey: .shortcutBusiness) ?? ""
-        // 0.3.x migration: the third mode was renamed calm → random.
-        shortcutRandom = try c.decodeIfPresent(String.self, forKey: .shortcutRandom)
-            ?? (try? Self.legacyCalmShortcut(decoder)) ?? ""
-        instructionPrivate  = try c.decodeIfPresent(String.self, forKey: .instructionPrivate)  ?? ""
-        instructionBusiness = try c.decodeIfPresent(String.self, forKey: .instructionBusiness) ?? ""
-        instructionRandom   = try c.decodeIfPresent(String.self, forKey: .instructionRandom)   ?? ""
+        shortcutPrivate    = try c.decodeIfPresent(String.self, forKey: .shortcutPrivate)    ?? ""
+        shortcutTranscribe = try c.decodeIfPresent(String.self, forKey: .shortcutTranscribe) ?? ""
+        instructionPrivate = try c.decodeIfPresent(String.self, forKey: .instructionPrivate) ?? ""
         transcribeModel = try c.decodeIfPresent(String.self, forKey: .transcribeModel) ?? TranscribeModel.recommended.id
         textModel       = try c.decodeIfPresent(String.self, forKey: .textModel)       ?? TextModel.recommended.id
         customVocabulary = try c.decodeIfPresent(String.self, forKey: .customVocabulary) ?? ""
@@ -106,12 +104,9 @@ struct AppSettings: Codable, Equatable {
         outputMode = try c.decodeIfPresent(OutputMode.self, forKey: .outputMode) ?? .insertIntoField
         microphoneDevice = try c.decodeIfPresent(String.self, forKey: .microphoneDevice)
         historyEnabled = try c.decodeIfPresent(Bool.self, forKey: .historyEnabled) ?? true
+        autoRecordTeamsCalls = try c.decodeIfPresent(Bool.self, forKey: .autoRecordTeamsCalls) ?? true
     }
 
-    private static func legacyCalmShortcut(_ decoder: Decoder) throws -> String {
-        struct Legacy: Decodable { let shortcutCalm: String? }
-        return try Legacy(from: decoder).shortcutCalm ?? ""
-    }
 }
 
 // MARK: - Model catalogues (shown in Settings with guidance)
@@ -125,23 +120,23 @@ struct TranscribeModel: Identifiable, Equatable {
 
     static let all: [TranscribeModel] = [
         TranscribeModel(
+            id: "gpt-transcribe",
+            name: "GPT Transcribe — empfohlen",
+            guidance: "OpenAIs aktuelles Modell: vollständig auch bei Denkpausen (auf echten 20-Min-Aufnahmen verifiziert), Wörterbuch nativ, erkennt Sprachen automatisch, ≈ 0.45 Rp./Min."
+        ),
+        TranscribeModel(
             id: "whisper-1",
-            name: "Whisper — empfohlen",
-            guidance: "Der zuverlässigste: transkribiert auch Diktate mit Denkpausen vollständig (die GPT-4o-Modelle brechen dort nachweislich ab). 98 Sprachen, ≈ 0.6 Rp./Min. Verhörer korrigiert die Politur-Stufe."
+            name: "Whisper (läuft am 26.02.2027 aus)",
+            guidance: "Bewährt und pausen-robust, wird aber von OpenAI abgeschaltet — nur noch als Notfall-Rückfall."
         ),
         TranscribeModel(
             id: "gpt-4o-transcribe",
-            name: "GPT-4o Transcribe",
-            guidance: "Punktgenau bei klarer, pausenfreier Sprache — kann aber bei längeren Sprechpausen mitten im Diktat aufhören (getestet: 20-Min-Aufnahme endete mitten im Satz)."
-        ),
-        TranscribeModel(
-            id: "gpt-4o-mini-transcribe",
-            name: "GPT-4o mini Transcribe — am günstigsten",
-            guidance: "Am schnellsten und halb so teuer (≈ 0.3 Rp./Min), aber fehleranfälliger und mit derselben Pausen-Schwäche wie GPT-4o Transcribe."
+            name: "GPT-4o Transcribe (läuft am 26.02.2027 aus)",
+            guidance: "Bricht bei längeren Sprechpausen nachweislich ab und wird abgeschaltet."
         )
     ]
 
-    static let recommended = all[0]   // whisper-1
+    static let recommended = all[0]   // gpt-transcribe
 
     static func byID(_ id: String) -> TranscribeModel {
         all.first { $0.id == id } ?? recommended
