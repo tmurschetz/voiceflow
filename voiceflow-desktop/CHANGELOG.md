@@ -23,8 +23,13 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 ## [2.0.0] — 2026-11-12 (in progress)
 
 ### Two modes instead of three
-- **Dictate** (was Privat): ChatGPT-style — fillers out, punctuation in, mishearings
-  fixed, otherwise verbatim. Pastes into the active field.
+- **Dictate** (was Privat): ChatGPT-style — hesitation sounds and stumbles out,
+  punctuation in, clear mishearings fixed, otherwise verbatim: same words, same
+  sentence length, same register. Casual words ("halt", "quasi", "eigentlich") stay;
+  Swiss spelling only, no vocabulary swaps. Pastes into the active field.
+- The 1.x "Instruktion" (a persona that restyled dictations) is parked once under
+  `legacyInstructionPrivate_v1` in UserDefaults and Dictate starts with an empty
+  instruction; the field is now for preferences (spelling, formatting, terminology).
 - **Transcribe** (new): records Teams & other calls with **both sides** — your
   microphone and the system audio as separate tracks — and files a time-stamped,
   speaker-labelled transcript ("Du:" / "Gegenseite:") in the history. Never pastes.

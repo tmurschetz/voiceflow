@@ -85,6 +85,29 @@ final class SettingsService: ObservableObject {
         NSLog("[VF-Settings] Migrated transcription model: %@ → gpt-transcribe (deprecation)", old)
     }
 
+    /// 2.0: Dictate is ChatGPT-style cleanup — the 1.x "Instruktion" was a
+    /// persona that RESTYLED every dictation (tone, slang, sentence length), the
+    /// opposite of what Dictate now promises. Park it once under a legacy key so
+    /// nothing is lost (Settings can be re-filled by hand), and start 2.0 with an
+    /// empty instruction. Users who open Settings and type a new one are untouched
+    /// afterwards (flag).
+    static let legacyInstructionKey = "com.voiceflow.desktop.legacyInstructionPrivate_v1"
+
+    func migrateDictateInstructionForV2IfNeeded() {
+        let flag = "com.voiceflow.desktop.instructionMigrated_v2"
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: flag) else { return }
+        defaults.set(true, forKey: flag)
+
+        var settings = loadSettings()
+        let old = settings.instructionPrivate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !old.isEmpty else { return }
+        defaults.set(old, forKey: Self.legacyInstructionKey)
+        settings.instructionPrivate = ""
+        try? saveSettings(settings)
+        NSLog("[VF-Settings] 2.0: parked the 1.x Dictate instruction (%d chars) under %@", old.count, Self.legacyInstructionKey)
+    }
+
     /// One-time upgrade of the rewrite model (1.1.2): mini's cleanup measurably
     /// degraded dictations (dropped qualifiers, swapped synonyms) — gpt-4o is
     /// the new default for faithful cleanup. Same pattern as above: users still

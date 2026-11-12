@@ -116,6 +116,16 @@ enum SelfTest {
             check("Hochdeutsch (kein Dialekt)", dialectScore(out) <= 1, detail: "score \(dialectScore(out))")
         }
 
+        // 2b. Restraint (2.0): casual real words stay, only hesitation sounds go.
+        if let out = await process(processor, "das ist halt quasi ähm so ein bisschen schwierig geworden ehrlich gesagt",
+                                   mode: .dictate, instruction: "", textModel: textModel) {
+            let low = " " + out.lowercased() + " "
+            check("Dezent: 'halt' und 'quasi' bleiben (nur 'ähm' raus)",
+                  low.contains(" halt ") && low.contains(" quasi ") && !low.contains("ähm"),
+                  detail: "Output: \(out)")
+            check("Dezent: 'ehrlich gesagt' bleibt", low.contains("ehrlich gesagt"), detail: "Output: \(out)")
+        }
+
         // 3. Dictate must NEVER change the form of address (1.1 fix).
         print("\n[3] Dictate — Anrede bleibt wie gesprochen")
         if let out = await process(processor, "kannst du mir bitte die unterlagen bis morgen mittag schicken danke dir",
