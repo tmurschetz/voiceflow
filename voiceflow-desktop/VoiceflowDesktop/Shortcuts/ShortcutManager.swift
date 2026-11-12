@@ -75,6 +75,10 @@ final class ShortcutManager {
     // MARK: - Private
 
     private func attachHandlers() {
+        // onKeyDown APPENDS. Settings auto-saves on every draft change and
+        // re-attaches, so handlers used to pile up — one key press then ran the
+        // toggle N times and Transcribe started and stopped in the same instant.
+        KeyboardShortcuts.removeAllHandlers()
         KeyboardShortcuts.onKeyDown(for: .dictatePrivate) { [weak self] in
             self?.handler?(.dictate)
         }
