@@ -95,12 +95,12 @@ final class OpenAIClient {
     /// If the account lacks access to the selected model (400/403/404 model
     /// error), falls back to whisper-1 for this call — without overriding the
     /// user's choice in Settings.
-    func transcribe(audioData: Data, fileExt: String, languageCode: String?,
+    func transcribe(audioData: Data, fileExt: String, languageCodes: [String],
                     model: String, apiKey: String, prompt: String? = nil,
                     keywords: String? = nil, audioSeconds: Int = 0) async throws -> Transcription {
         do {
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
-                                            languageCode: languageCode, model: model, apiKey: apiKey,
+                                            languageCodes: languageCodes, model: model, apiKey: apiKey,
                                             prompt: prompt, keywords: keywords, audioSeconds: audioSeconds)
         } catch let OpenAIError.httpError(code, message) where model != "whisper-1"
                     && (code == 400 || code == 403 || code == 404)
@@ -109,8 +109,10 @@ final class OpenAIClient {
             // cap — whisper-1 (available until 2027-02-26) is the safety net.
             NSLog("[OpenAIClient] %@ rejected (%d: %@) — falling back to whisper-1 for this call",
                   model, code, String(message.prefix(80)))
+            // whisper-1 takes a single language — only pass it when unambiguous.
             return try await transcribeOnce(audioData: audioData, fileExt: fileExt,
-                                            languageCode: languageCode, model: "whisper-1", apiKey: apiKey,
+                                            languageCodes: languageCodes.count == 1 ? languageCodes : [],
+                                            model: "whisper-1", apiKey: apiKey,
                                             prompt: prompt, keywords: nil, audioSeconds: audioSeconds)
         }
     }
@@ -123,21 +125,31 @@ final class OpenAIClient {
             || m.contains("longer than") || m.contains("maximum") || m.contains("1500")
     }
 
-    private func transcribeOnce(audioData: Data, fileExt: String, languageCode: String?,
+    private func transcribeOnce(audioData: Data, fileExt: String, languageCodes: [String],
                                 model: String, apiKey: String, prompt: String? = nil,
                                 keywords: String? = nil, audioSeconds: Int = 0) async throws -> Transcription {
         let isGptTranscribe = model.hasPrefix("gpt-transcribe")
         let boundary = "VF-\(UUID().uuidString)"
-        let mimeType = fileExt == "m4a" ? "audio/m4a" : "audio/x-caf"
+        let mimeType: String = {
+            switch fileExt {
+            case "m4a": return "audio/m4a"
+            case "wav": return "audio/wav"
+            default:    return "audio/x-caf"
+            }
+        }()
 
         var body = Data()
         body.appendFormField(name: "model", value: model, boundary: boundary)
         // Fast server path: plain JSON, no timestamps/verbose metadata.
         body.appendFormField(name: "response_format", value: "json", boundary: boundary)
-        if let languageCode {
-            // gpt-transcribe replaced the singular `language` with `languages[]`.
-            body.appendFormField(name: isGptTranscribe ? "languages[]" : "language",
-                                 value: languageCode, boundary: boundary)
+        if isGptTranscribe {
+            // gpt-transcribe replaced the singular `language` with `languages[]`;
+            // several codes restrict auto-detection to those languages.
+            for code in languageCodes {
+                body.appendFormField(name: "languages[]", value: code, boundary: boundary)
+            }
+        } else if languageCodes.count == 1 {
+            body.appendFormField(name: "language", value: languageCodes[0], boundary: boundary)
         }
         // Recognition bias: a short style hint (punctuation, dates) …
         if let prompt, !prompt.isEmpty {

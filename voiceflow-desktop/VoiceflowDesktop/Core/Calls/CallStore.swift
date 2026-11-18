@@ -36,6 +36,25 @@ final class CallStore {
     private let decoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
     private let queue = DispatchQueue(label: "com.voiceflow.desktop.calls", qos: .utility)
 
+    /// Local diagnostic log for the call automation (Teams detection, chunking).
+    /// No transcript content — events and counts only. Kept under ~200 KB.
+    func logEvent(_ message: String) {
+        let url = baseURL.appendingPathComponent("events.log")
+        try? FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
+        let line = ISO8601DateFormatter().string(from: Date()) + " " + message + "\n"
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let size = attrs[.size] as? Int, size > 200_000 {
+            let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            try? String(text.suffix(100_000)).write(to: url, atomically: true, encoding: .utf8)
+        }
+        if let h = try? FileHandle(forWritingTo: url) {
+            h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+        } else {
+            try? line.write(to: url, atomically: true, encoding: .utf8)
+        }
+        NSLog("[VF-Call] %@", message)
+    }
+
     func folder(for id: String) -> URL { baseURL.appendingPathComponent(id, isDirectory: true) }
 
     // MARK: - Read

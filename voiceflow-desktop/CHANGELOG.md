@@ -62,6 +62,32 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
   One-time migration; whisper-1 stays as emergency fallback until shutdown.
 
 ### Fixed
+- **Teams auto-start never fired:** new Teams captures the microphone in helper
+  processes (`com.microsoft.teams2.helper`/`modulehost`), not the main process the
+  detector watched. All Teams processes are matched now. A manually started
+  recording that Teams then joins also stops with the call.
+- **Call transcripts duplicated the other side:** on laptop speakers the far side
+  leaks into the mic (measured: ~2/3 level, 100 ms late, 70 % of mic "speech").
+  Echo is now removed per 50 ms window against the system track, and sentences on
+  your side that repeat what the other side said at the same moment are dropped.
+- Mic-only stretches before the other side's first and after their last words
+  (room talk before joining) are trimmed, with a 20 s margin.
+- Languages restricted to German/English (`languages[] = de, en`) for calls and
+  dictation — Swiss German was detected as Dutch/Spanish/Vietnamese.
+- Phantom lines on near-silence ("ChatGPT.", "Bones.") filtered; pieces < 1 s no
+  longer uploaded; short interjections no longer split a turn.
+- Participant was "Calendar": titles in the current Teams format
+  ("Area | Name | Tenant | account") are parsed; the meeting window and the window
+  that opened with the call win.
+- CPU: chunks exported as 16 kHz WAV (no AAC re-encode), vDSP energy analysis,
+  processing at utility priority, far fewer uploads per call.
+- **Dictation pasted twice / not at all:** the AX value write (reported errors after
+  applying the text → ⌘V pasted it again) is gone. Always clipboard + ⌘V, sent to
+  the active window once the target app is really frontmost; previous clipboard
+  restored after 2 s. A shortcut press while a dictation is still processing no
+  longer starts a second recording.
+- Local diagnostics: `Calls/events.log` (Teams mic on/off, chunk counts — no content).
+
 - Shortcut recorder in Settings/Setup accepted no key presses on macOS 26/27 —
   KeyboardShortcuts 2.4.0 bug (sindresorhus/KeyboardShortcuts#241). Upgraded to
   3.1.0, which fixes the recorder. Transcribe shortcut can now be set.
