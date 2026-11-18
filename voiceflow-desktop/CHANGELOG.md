@@ -20,7 +20,7 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
 
 ---
 
-## [2.0.0] — 2026-11-12 (in progress)
+## [2.0.0] — 2026-11-18
 
 ### Two modes instead of three
 - **Dictate** (was Privat): ChatGPT-style — hesitation sounds and stumbles out,
@@ -97,7 +97,7 @@ make release-notes RELEASE=0.3.0 TAG=1  # …and create git tag v0.3.0
   not appended.
 
 ### Tests
-- Selftest 59 checks incl. [18]: two-track speaker segmentation on synthetic audio,
+- Selftest 71 checks incl. two-track speaker segmentation and echo removal on synthetic audio,
   Teams debounce, participant guess, export text, timestamps.
 
 ---
