@@ -4,61 +4,55 @@ import CoreGraphics
 
 /// Outputs the processed text into the currently focused text field or the clipboard.
 ///
-/// # Strategy order for `.insertIntoField`
+/// `.insertIntoField` = clipboard + ⌘V, always (build 34). The earlier first
+/// strategy — writing the field's whole AX value — was dropped: browser and
+/// Electron fields (Teams, new Outlook, web apps) often applied the write but
+/// reported an error, so the ⌘V fallback inserted the text a SECOND time, and
+/// in other fields the write "succeeded" without the app noticing.
 ///
-///  1. **AX value write** — sets `kAXValueAttribute` on the focused element directly.
-///     Fast, cursor-position-aware, leaves the user's clipboard untouched.
-///     Works for native AppKit / Cocoa text fields.
-///     Requires Accessibility permission.
+/// The ⌘V goes to the active window through the HID event tap (not to a
+/// process id, which web-based apps ignore), only after the target app is
+/// really frontmost. The user's previous clipboard is restored afterwards,
+/// unless something else was copied in the meantime.
 ///
-///  2. **Clipboard + ⌘V simulation** — writes text to `NSPasteboard`, then posts a
-///     CGEvent ⌘V keystroke.  Works universally: browsers (Chrome, Safari, Firefox),
-///     Electron apps, web views.  Does NOT require Accessibility permission.
-///     Side-effect: overwrites the user's clipboard.
-///
-///  3. **Clipboard only** — written when mode is `.clipboardOnly`.
-///     Also the silent last-resort if posting CGEvents fails.
-///
-/// Return value: `true` if the clipboard was the final delivery method
-/// (either because mode is `.clipboardOnly`, or because AX insertion failed
-/// and we fell back to clipboard + paste). Callers can use this to show a
-/// "pasted from clipboard" indicator.
+/// Return value: `true` if the text was only placed on the clipboard (mode
+/// `.clipboardOnly`, or no Accessibility permission to send ⌘V).
+@MainActor
 final class OutputService {
+
+    /// Delay before the previous clipboard comes back — long enough for slow
+    /// (Electron) apps to read the pasteboard after ⌘V.
+    static let restoreDelaySeconds: Double = 2.0
 
     // MARK: - Public API
 
-    /// Outputs text according to the chosen mode.
-    /// - Parameters:
-    ///   - text: The text to output.
-    ///   - mode: `.insertIntoField` or `.clipboardOnly`.
-    ///   - targetPID: PID of the app that should receive the ⌘V keystroke.
-    ///     Capture this at the moment the user presses the shortcut (before async processing
-    ///     starts) so the paste lands in the right app even after several seconds of
-    ///     Whisper + Gemini processing. If `nil`, falls back to `.cgAnnotatedSessionEventTap`.
-    /// - Returns: `true` if clipboard was used as the delivery mechanism.
     @discardableResult
     func output(text: String, mode: OutputMode, targetPID: pid_t? = nil) async throws -> Bool {
         switch mode {
-
         case .clipboardOnly:
             copyToClipboard(text)
-            return true   // clipboard is the chosen mode, not a fallback
+            return true
 
         case .insertIntoField:
-            // Strategy 1 — AX direct value write (native apps, no clipboard touch)
-            if AXIsProcessTrusted() {
-                let axError = attemptAXInsertion(text)
-                if axError == .success { return false }  // inserted cleanly, no clipboard used
-                // Fall through on .cannotComplete (browser / Electron) or .noValue
-                #if DEBUG
-                print("[OutputService] AX insert failed (\(axError.rawValue)) — falling back to paste")
-                #endif
+            // Without Accessibility we can't send ⌘V — leave it on the clipboard.
+            guard AXIsProcessTrusted() else {
+                copyToClipboard(text)
+                return true
             }
-
-            // Strategy 2 — Clipboard + ⌘V (works in every app)
+            let previous = snapshotPasteboard()
             copyToClipboard(text)
-            simulatePasteKeystroke(targetPID: targetPID)
-            return true   // clipboard was involved (paste simulation)
+            let ourChange = NSPasteboard.general.changeCount
+
+            await bringToFront(targetPID)
+            postPasteKeystroke()
+
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(Self.restoreDelaySeconds * 1_000_000_000))
+                // Only if nobody (user or app) changed the clipboard since.
+                guard NSPasteboard.general.changeCount == ourChange else { return }
+                self.restorePasteboard(previous)
+            }
+            return false
         }
     }
 
@@ -69,112 +63,71 @@ final class OutputService {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    // MARK: - Strategy 1: AX Value Write
-
-    /// Attempts to insert `text` at the cursor position of the focused UI element.
-    /// Returns the `AXError` from the final `AXUIElementSetAttributeValue` call,
-    /// or `.cannotComplete` if the element is not text-settable.
-    private func attemptAXInsertion(_ text: String) -> AXError {
-        let systemWide = AXUIElementCreateSystemWide()
-        var focusedRef: AnyObject?
-        let fetchErr = AXUIElementCopyAttributeValue(
-            systemWide,
-            kAXFocusedUIElementAttribute as CFString,
-            &focusedRef
-        )
-        guard fetchErr == .success, let ref = focusedRef else {
-            return fetchErr == .success ? .noValue : fetchErr
-        }
-        // AXUIElement is a Core Foundation type bridged as AnyObject.
-        // The cast is guaranteed to succeed when AXUIElementCopyAttributeValue succeeds.
-        let element = ref as! AXUIElement // swiftlint:disable:this force_cast
-
-        // Bail out early if the element's value isn't writable
-        var settable: DarwinBoolean = false
-        AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &settable)
-        guard settable.boolValue else { return .cannotComplete }
-
-        // Read current text
-        var currentRef: AnyObject?
-        AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &currentRef)
-        let current = (currentRef as? String) ?? ""
-
-        // Determine cursor insertion point from the selected-text range
-        var rangeRef: AnyObject?
-        AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef)
-
-        var insertionIndex = current.endIndex
-        if let rangeVal = rangeRef {
-            var cfRange = CFRange()
-            if AXValueGetValue(rangeVal as! AXValue, AXValueType(rawValue: kAXValueCFRangeType)!, &cfRange), // swiftlint:disable:this force_cast
-               cfRange.location >= 0, cfRange.location <= current.count {
-                insertionIndex = current.index(current.startIndex, offsetBy: cfRange.location)
+    private func snapshotPasteboard() -> [[NSPasteboard.PasteboardType: Data]] {
+        (NSPasteboard.general.pasteboardItems ?? []).map { item in
+            var entry: [NSPasteboard.PasteboardType: Data] = [:]
+            for type in item.types {
+                if let data = item.data(forType: type) { entry[type] = data }
             }
+            return entry
         }
-
-        var updated = current
-        updated.insert(contentsOf: text, at: insertionIndex)
-
-        return AXUIElementSetAttributeValue(
-            element,
-            kAXValueAttribute as CFString,
-            updated as CFTypeRef
-        )
     }
 
-    // MARK: - Strategy 2: CGEventPost ⌘V
-
-    /// Posts a ⌘V keystroke to the target application.
-    ///
-    /// The clipboard must be populated before this is called.
-    /// A 150 ms delay gives the pasteboard change time to propagate and allows
-    /// the target app to be ready to accept input.
-    ///
-    /// Virtual key 9 = V on all standard keyboard layouts (it is a hardware position
-    /// code, not a character code, so it is layout-independent for ⌘V).
-    ///
-    /// - Parameter targetPID: When non-nil and > 0, uses `CGEventPostToPid` to deliver
-    ///   the keystroke directly to the specific process regardless of which app is currently
-    ///   frontmost. This is essential because async processing (Whisper + Gemini) can take
-    ///   several seconds, during which the user may have briefly lost or changed focus.
-    ///   Falls back to `.cgAnnotatedSessionEventTap` (frontmost app) when nil.
-    private func simulatePasteKeystroke(targetPID: pid_t?) {
-        // Diagnostic snapshot at call time
-        let axTrusted = AXIsProcessTrusted()
-        let frontmostNow = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
-        NSLog("[VF-Paste] called. targetPID=%d frontmostNow=%d axTrusted=%@",
-              Int(targetPID ?? -1), Int(frontmostNow), axTrusted ? "YES" : "NO")
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            // Re-activate the original target app so the keystroke lands there.
-            // This is essential when our menu bar app's status panel briefly
-            // stole focus, or when another app became frontmost during processing.
-            if let pid = targetPID, pid > 0,
-               let target = NSRunningApplication(processIdentifier: pid) {
-                let activated = target.activate()
-                NSLog("[VF-Paste] activate(target=%d) -> %@", Int(pid), activated ? "YES" : "NO")
-            }
-
-            let source = CGEventSource(stateID: .hidSystemState)
-            guard
-                let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
-                let keyUp   = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
-            else {
-                NSLog("[VF-Paste] CGEvent creation FAILED")
-                return
-            }
-            keyDown.flags = .maskCommand
-            keyUp.flags   = .maskCommand
-            if let pid = targetPID, pid > 0 {
-                // Deliver directly to the captured app's process.
-                keyDown.postToPid(pid)
-                keyUp.postToPid(pid)
-                NSLog("[VF-Paste] posted ⌘V to pid=%d", Int(pid))
-            } else {
-                keyDown.post(tap: .cgAnnotatedSessionEventTap)
-                keyUp.post(tap: .cgAnnotatedSessionEventTap)
-                NSLog("[VF-Paste] posted ⌘V to event tap (no pid)")
-            }
+    private func restorePasteboard(_ items: [[NSPasteboard.PasteboardType: Data]]) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        guard !items.isEmpty else { return }
+        let restored: [NSPasteboardItem] = items.map { entry in
+            let item = NSPasteboardItem()
+            for (type, data) in entry { item.setData(data, forType: type) }
+            return item
         }
+        pb.writeObjects(restored)
+    }
+
+    // MARK: - Paste
+
+    /// Activates the app that was frontmost when the dictation stopped and waits
+    /// (≤ 0.8 s) until it really is frontmost — activation is asynchronous, and a
+    /// ⌘V sent too early lands nowhere.
+    private func bringToFront(_ pid: pid_t?) async {
+        guard let pid, pid > 0, let app = NSRunningApplication(processIdentifier: pid) else {
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            return
+        }
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
+            app.activate()
+            for _ in 0..<40 {
+                if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { break }
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+            NSLog("[VF-Paste] activated pid=%d frontmost=%@", Int(pid),
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier == pid ? "YES" : "NO")
+        }
+        // Let the focused field settle (key window, first responder).
+        try? await Task.sleep(nanoseconds: 80_000_000)
+    }
+
+    /// ⌘ down, V down, V up, ⌘ up — a full chord, like a real keyboard. Some
+    /// Electron apps ignore a bare V carrying only the command flag.
+    private func postPasteKeystroke() {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let cmd: CGKeyCode = 55, v: CGKeyCode = 9
+        guard
+            let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: cmd, keyDown: true),
+            let vDown   = CGEvent(keyboardEventSource: source, virtualKey: v, keyDown: true),
+            let vUp     = CGEvent(keyboardEventSource: source, virtualKey: v, keyDown: false),
+            let cmdUp   = CGEvent(keyboardEventSource: source, virtualKey: cmd, keyDown: false)
+        else {
+            NSLog("[VF-Paste] CGEvent creation FAILED")
+            return
+        }
+        cmdDown.flags = .maskCommand
+        vDown.flags = .maskCommand
+        vUp.flags = .maskCommand
+        cmdUp.flags = []
+        for e in [cmdDown, vDown, vUp, cmdUp] { e.post(tap: .cghidEventTap) }
+        NSLog("[VF-Paste] posted ⌘V to frontmost=%d",
+              Int(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1))
     }
 }

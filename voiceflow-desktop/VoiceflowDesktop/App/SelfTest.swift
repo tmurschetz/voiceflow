@@ -14,6 +14,51 @@ import AVFoundation
 @MainActor
 enum SelfTest {
 
+    /// Re-runs a stored call through the current segmentation + transcription
+    /// pipeline (diagnostics; the stored record is NOT modified):
+    ///   Voiceflow --reprocess-call <call folder> [--dry] [--out <file>]
+    /// --dry: analysis only, no upload (prints chunk statistics).
+    static func runReprocessIfRequested() -> Bool {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--reprocess-call"), args.indices.contains(i + 1) else { return false }
+        let folder = URL(fileURLWithPath: args[i + 1])
+        let dry = args.contains("--dry")
+        let out = args.firstIndex(of: "--out").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
+        Task { @MainActor in
+            let mic = folder.appendingPathComponent("mic.m4a"), sys = folder.appendingPathComponent("system.m4a")
+            let t0 = Date()
+            if dry {
+                let planned = await Task.detached(priority: .utility) { () -> ([(speaker: CallSegmenter.Speaker, start: TimeInterval, end: TimeInterval)], CallSegmenter.Stats) in
+                    let r = CallSegmenter.plan(micURL: mic, systemURL: sys); return (r.ranges, r.stats)
+                }.value
+                let (ranges, st) = planned
+                let me = ranges.filter { $0.speaker == .me }.count
+                print(String(format: "analysis %.1fs: %d chunks (me %d / other %d) from %d+%d segments, %d trimmed, echo removed %.0fs",
+                             Date().timeIntervalSince(t0), ranges.count, me, ranges.count - me,
+                             st.micSegments, st.systemSegments, st.trimmed, st.echoRemovedSeconds))
+                exit(0)
+            }
+            let work = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vf-reprocess-\(UUID().uuidString)")
+            let made = await Task.detached(priority: .utility) { () -> ([CallSegmenter.Chunk], CallSegmenter.Stats) in
+                let r = CallSegmenter.makeChunksWithStats(micURL: mic, systemURL: sys, workDir: work); return (r.chunks, r.stats)
+            }.value
+            let (chunks, st) = made
+            let tSeg = Date().timeIntervalSince(t0)
+            let settings = SettingsService().loadSettings()
+            let result = await CallTranscriber().transcribe(chunks: chunks, vocabulary: settings.customVocabulary,
+                                                            model: settings.transcribeModel)
+            try? FileManager.default.removeItem(at: work)
+            print(String(format: "segmentation+export %.1fs, total %.1fs: %d chunks, %d failed, langs %@, echo sentences removed %d, phantoms %d, trimmed %d, echo audio %.0fs",
+                         tSeg, Date().timeIntervalSince(t0), result.chunkCount, result.failedChunks,
+                         result.languages.joined(separator: ","), result.echoSentencesRemoved,
+                         result.phantomPiecesRemoved, st.trimmed, st.echoRemovedSeconds))
+            if let out { try? result.transcript.write(toFile: out, atomically: true, encoding: .utf8) }
+            else { print(result.transcript) }
+            exit(result.transcript.isEmpty ? 1 : 0)
+        }
+        return true
+    }
+
     static func runIfRequested() -> Bool {
         let args = CommandLine.arguments
         guard let i = args.firstIndex(of: "--selftest") else { return false }
@@ -403,6 +448,32 @@ enum SelfTest {
                 let exported = chunks.allSatisfy { ((try? Data(contentsOf: $0.fileURL))?.count ?? 0) > 1200 }
                 check("Chunk-Dateien exportiert", exported)
             }
+            // Echo: the far side (220 Hz) leaks into the mic at 60 %, 100 ms late;
+            // own speech (330 Hz) at 0–2 s and 6–8 s. Echo must not become "Du".
+            func track(seconds: Double, parts: [(Double, Double, Float, Double)], url: URL) throws {
+                let rate = 16_000.0
+                let fmt = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+                let settings: [String: Any] = [AVFormatIDKey: Int(kAudioFormatMPEG4AAC), AVSampleRateKey: rate,
+                                               AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 48_000]
+                let file = try AVAudioFile(forWriting: url, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                let n = AVAudioFrameCount(seconds * rate)
+                let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: n)!
+                buf.frameLength = n
+                for i in 0..<Int(n) {
+                    let t = Double(i) / rate
+                    var v: Float = 0
+                    for p in parts where t >= p.0 && t < p.1 { v += p.2 * Float(sin(2 * .pi * p.3 * t)) }
+                    buf.floatChannelData![0][i] = v
+                }
+                try file.write(from: buf)
+            }
+            let echoMic = dir.appendingPathComponent("echo-mic.m4a"), echoSys = dir.appendingPathComponent("echo-sys.m4a")
+            try track(seconds: 16, parts: [(0, 2, 0.3, 330), (6, 8, 0.3, 330), (3.1, 5.1, 0.18, 220), (10.1, 14.1, 0.18, 220)], url: echoMic)
+            try track(seconds: 16, parts: [(3, 5, 0.3, 220), (10, 14, 0.3, 220)], url: echoSys)
+            let plan = CallSegmenter.plan(micURL: echoMic, systemURL: echoSys)
+            let echoPattern = plan.ranges.map { $0.speaker == .me ? "me" : "other" }.joined(separator: ",")
+            check("Echo der Gegenseite im Mikrofon wird nicht «Du» (me,other,me,other)",
+                  echoPattern == "me,other,me,other", detail: "war \(echoPattern)")
             try? FileManager.default.removeItem(at: dir)
         } catch {
             check("Synthetisches Call-Audio erzeugt", false, detail: error.localizedDescription)
@@ -418,8 +489,59 @@ enum SelfTest {
         for active in [false, true, false, false, false, false] { stops.append(stopDeb.tick(callActive: active, recording: true)) }
         check("Teams-Stop erst nach 4 ruhigen Polls (ein Aussetzer stoppt nicht)",
               stops == [.none, .none, .none, .none, .none, .stop])
-        check("Teilnehmer-Erkennung aus Teams-Fenstertiteln",
+        check("Teilnehmer-Erkennung aus Teams-Fenstertiteln (altes Format)",
               TeamsCallDetector.participantGuess(from: ["Chat | Microsoft Teams", "Thomas Boli | Microsoft Teams", "Kalender | Microsoft Teams"]) == "Thomas Boli")
+
+        // Build 34: new Teams title format "Area | Name | Tenant | account" (real titles).
+        let acct = " | ISOLUTIONS AG | someone@example.ch"
+        let realTitles: Set<String> = [
+            "Calendar" + acct, "Chat | Nicolas Durville" + acct, "CX Circle - November edition" + acct,
+            "Meeting compact view | Bi-Weekly TST Mentoring || NDU - TMU" + acct,
+            "Bi-Weekly TST Mentoring || NDU - TMU" + acct, "Sharing control bar" + acct + " | Pinned window"]
+        let guess = TeamsCallDetector.participantGuess(from: realTitles)
+        check("Teilnehmer: Meeting-Fenster statt «Calendar» (neues Teams-Format)",
+              guess == "Bi-Weekly TST Mentoring || NDU - TMU", detail: "war \(guess ?? "nil")")
+        let oneToOne = TeamsCallDetector.participantGuess(
+            from: ["CX Circle - November edition" + acct, "Thomas F. x Tom" + acct, "Calendar" + acct],
+            newAtStart: ["Thomas F. x Tom" + acct])
+        check("Teilnehmer: beim Call-Start neu geöffnetes Fenster gewinnt", oneToOne == "Thomas F. x Tom",
+              detail: "war \(oneToOne ?? "nil")")
+        check("Nur generische Fenster → kein Teilnehmer",
+              TeamsCallDetector.participantGuess(from: ["Calendar" + acct, "Activity" + acct]) == nil)
+        check("Teams-Hilfsprozesse zählen für die Call-Erkennung",
+              TeamsCallDetector.isTeamsBundle("com.microsoft.teams2.helper")
+              && TeamsCallDetector.isTeamsBundle("com.microsoft.teams2.modulehost")
+              && !TeamsCallDetector.isTeamsBundle("com.microsoft.edgemac"))
+
+        // Segmentation logic on plain segments.
+        typealias Seg = CallSegmenter.Segment
+        let sys = [Seg(speaker: .other, start: 100, end: 200)]
+        let micSegs = [Seg(speaker: .me, start: 10, end: 20), Seg(speaker: .me, start: 90, end: 95),
+                       Seg(speaker: .me, start: 250, end: 260)]
+        let trimmed = CallSegmenter.trimToCall(mic: micSegs, system: sys)
+        check("Vor/nach dem Call: nur Mikrofon → abgeschnitten (Rand 20 s bleibt)",
+              trimmed.count == 1 && trimmed[0].start == 90, detail: "war \(trimmed.map(\.start))")
+        let turns = CallSegmenter.chunkRanges([Seg(speaker: .me, start: 0, end: 10),
+                                               Seg(speaker: .other, start: 10.5, end: 11.2),
+                                               Seg(speaker: .me, start: 11.5, end: 20)])
+        check("Kurzer Einwurf («ja») teilt den Redebeitrag nicht",
+              turns.count == 1 && turns[0].speaker == .me && turns[0].end == 20, detail: "war \(turns.count) Chunks")
+
+        // Text safety nets.
+        let echoed = [
+            CallTranscriber.Piece(speaker: .other, start: 10, end: 20,
+                                  text: "Ja, ich denke mehr, weisst du auch in deiner Rolle als AM natürlich, dass du einfach unterwegs bist."),
+            CallTranscriber.Piece(speaker: .me, start: 12, end: 25,
+                                  text: "Ja, ich denke mehr auch in deiner Rolle als AM natürlich, dass du einfach unterwegs bist. Ich habe cool gefunden, dass mich die Leute schon gefragt haben.")]
+        let (dedup, removedEcho) = CallTranscriber.removeEchoSentences(echoed)
+        let mine = dedup.first { $0.speaker == .me }?.text ?? ""
+        check("Echo-Satz auf deiner Seite entfernt, eigener Satz bleibt",
+              removedEcho == 1 && mine.hasPrefix("Ich habe cool gefunden"), detail: "Du: \(mine)")
+        check("Phantom-Zeilen erkannt («ChatGPT.», «Yo, I'll be outside.»), echte bleiben",
+              CallTranscriber.isPhantom("ChatGPT.") && CallTranscriber.isPhantom("Yo, I'll be outside.")
+              && !CallTranscriber.isPhantom("Ja, genau.") && !CallTranscriber.isPhantom("Thank you."))
+        check("Auto-Spracherkennung auf Deutsch/Englisch begrenzt",
+              TranscriptionService.autoDetectLanguages == ["de", "en"])
         let rec = CallStore.Record(id: "t", start: Date(timeIntervalSince1970: 1_700_000_000),
                                    end: Date(timeIntervalSince1970: 1_700_000_240), source: "manual",
                                    participant: "Reto Muster", languages: ["de"], status: "done",

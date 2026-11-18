@@ -24,7 +24,9 @@ struct TranscriptionResult {
 /// and costs half as much. OpenAIClient handles the model fallback transparently.
 ///
 /// Language handling:
-///   autoDetect   → no language param; the model detects German/Swiss German/English
+///   autoDetect   → gpt-transcribe: `languages[] = de, en` (the user speaks German,
+///                  Swiss German and English; unrestricted detection turned short
+///                  Swiss-German pieces into Dutch/Spanish). Other models: none.
 ///   .german      → "de"
 ///   .english     → "en"
 ///   .swissGerman → "de"  (dialect audio is transcribed under the German code)
@@ -66,14 +68,14 @@ final class TranscriptionService {
             throw TranscriptionError.noSpeech
         }
 
-        let languageCode: String?
+        let languageCodes: [String]
         let usedLocale: String
         switch language {
         case .autoDetect:
-            languageCode = nil
+            languageCodes = Self.autoDetectLanguages
             usedLocale = "auto"
         case .manual(let lang):
-            languageCode = lang.whisperCode
+            languageCodes = [lang.whisperCode]
             usedLocale = lang.rawValue
         }
 
@@ -102,7 +104,7 @@ final class TranscriptionService {
                 let result = try await client.transcribe(
                     audioData: audioData,
                     fileExt: fileExt,
-                    languageCode: languageCode,
+                    languageCodes: languageCodes,
                     model: effectiveModel,
                     apiKey: apiKey,
                     prompt: prompt,
@@ -203,6 +205,9 @@ final class TranscriptionService {
     /// container is ~557 bytes; the shortest real utterance is several KB. The
     /// byte floor catches the common case fast; the decoded-duration check is a
     /// format-agnostic backstop (also covers the .caf path for a chosen device).
+    /// Languages auto-detection may choose from (Swiss German is transcribed as "de").
+    static let autoDetectLanguages = ["de", "en"]
+
     static func isEmptyRecording(data: Data, url: URL) -> Bool {
         if data.count < 1200 { return true }
         if let file = try? AVAudioFile(forReading: url), file.fileFormat.sampleRate > 0 {

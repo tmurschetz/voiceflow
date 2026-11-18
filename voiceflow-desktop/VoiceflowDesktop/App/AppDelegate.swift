@@ -52,6 +52,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Teams has released the microphone (i.e. the call really ended).
     private var suppressTeamsAutoUntilIdle = false
     private var callStartTitles: Set<String> = []
+    /// Windows that opened when the call began (the call window) — best participant source.
+    private var callNewTitles: Set<String> = []
+    /// Teams window titles while no call runs, refreshed every ~30 s.
+    private var teamsIdleTitles: Set<String> = []
+    private var teamsPollCount = 0
+    /// A manually started recording that Teams then joined: stop it with the call.
+    private var teamsSeenDuringCall = false
+    private var lastTeamsActive = false
+    /// True from the stop press until the dictation is pasted — further presses
+    /// must not start a second recording.
+    private var isProcessingDictation = false
 
     // MARK: - Lifecycle
 
@@ -64,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Headless functional self-test (--selftest [audio]) — exercises the real
         // pipeline and exits with a pass/fail report.
+        if SelfTest.runReprocessIfRequested() { return }
         if SelfTest.runIfRequested() {
             return
         }
@@ -175,7 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Shortcut / menu / panel: start a call transcript, or stop the running one.
     private func toggleCallTranscription() {
         if callService.isRecording {
-            if callService.session?.source == "teams-auto" { suppressTeamsAutoUntilIdle = true }
+            if callService.session?.source == "teams-auto" || teamsSeenDuringCall { suppressTeamsAutoUntilIdle = true }
             Task { await stopCallAndProcess() }
         } else {
             startCall(source: "manual")
@@ -193,7 +205,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         callStartTitles = Set(TeamsCallDetector.teamsWindowTitles())
+        callNewTitles = teamsIdleTitles.isEmpty ? [] : callStartTitles.subtracting(teamsIdleTitles)
         callStartTitles.forEach { callService.noteParticipantHint($0) }
+        teamsSeenDuringCall = source == "teams-auto"
+        CallStore.shared.logEvent("call start source=\(source) newWindows=\(callNewTitles.count) systemAudio=\(!callService.systemAudioUnavailable)")
         publishCallStatus()
         callTimer?.invalidate()
         callTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -217,7 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             phase: .recording,
             elapsedSeconds: callService.elapsedSeconds,
             source: s.source,
-            participant: TeamsCallDetector.participantGuess(from: s.participantHints),
+            participant: TeamsCallDetector.participantGuess(from: s.participantHints, newAtStart: callNewTitles),
             systemAudioMissing: callService.systemAudioUnavailable))
     }
 
@@ -225,7 +240,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         callTimer?.invalidate(); callTimer = nil
         guard let session = callService.stop() else { menuBarController?.setCall(nil); return }
         let settings = settingsService.currentSettings
-        let participant = TeamsCallDetector.participantGuess(from: session.participantHints)
+        teamsSeenDuringCall = false
+        let participant = TeamsCallDetector.participantGuess(from: session.participantHints, newAtStart: callNewTitles)
         var record = CallStore.Record(
             id: session.id, start: session.startedAt, end: Date(), source: session.source,
             participant: participant, hints: Array(session.participantHints).sorted(),
@@ -239,10 +255,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Segment on a background thread (PCM decoding of two tracks), then transcribe.
         let micURL = session.micURL, sysURL = session.systemURL
         let workDir = session.folder.appendingPathComponent("chunks", isDirectory: true)
-        let chunks = await Task.detached(priority: .userInitiated) {
-            CallSegmenter.makeChunks(micURL: micURL, systemURL: sysURL, workDir: workDir)
+        // .utility: a long call must not spin the fans while you keep working.
+        let (chunks, stats) = await Task.detached(priority: .utility) {
+            CallSegmenter.makeChunksWithStats(micURL: micURL, systemURL: sysURL, workDir: workDir)
         }.value
-        NSLog("[VF-Call] %d chunks from %ds call", chunks.count, record.durationSeconds)
+        CallStore.shared.logEvent(String(format: "call stop %ds: %d chunks (me %d, other %d segments, %d trimmed, echo removed %.0fs)",
+                                         record.durationSeconds, chunks.count, stats.micSegments,
+                                         stats.systemSegments, stats.trimmed, stats.echoRemovedSeconds))
 
         let output = await callTranscriber.transcribe(
             chunks: chunks, vocabulary: settings?.customVocabulary ?? "",
@@ -257,6 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             })
         try? FileManager.default.removeItem(at: workDir)
+        CallStore.shared.logEvent("transcribed: failed \(output.failedChunks)/\(output.chunkCount), echo sentences removed \(output.echoSentencesRemoved), phantom pieces removed \(output.phantomPiecesRemoved)")
 
         record.transcript = output.transcript
         record.languages = output.languages
@@ -289,15 +309,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func pollTeams() {
         guard settingsService.currentSettings?.autoRecordTeamsCalls ?? true else { return }
-        let teamsActive = TeamsCallDetector.teamsIsUsingMicrophone()
+        let inputs = TeamsCallDetector.teamsProcessesUsingMicrophone()
+        let teamsActive = !inputs.isEmpty
+        if teamsActive != lastTeamsActive {
+            CallStore.shared.logEvent("teams mic \(teamsActive ? "ON" : "off") \(inputs.joined(separator: ","))")
+            lastTeamsActive = teamsActive
+        }
         if !teamsActive { suppressTeamsAutoUntilIdle = false }
-        let recordingTeamsCall = callService.isRecording && callService.session?.source == "teams-auto"
-        switch teamsDebouncer.tick(callActive: teamsActive, recording: recordingTeamsCall) {
+
+        // Remember which Teams windows exist outside calls, so the window that
+        // opens WITH the call can be told apart from a long-open calendar/chat.
+        teamsPollCount += 1
+        if !callService.isRecording, !teamsActive, teamsPollCount % 15 == 1, TeamsCallDetector.teamsApp() != nil {
+            teamsIdleTitles = Set(TeamsCallDetector.teamsWindowTitles())
+        }
+
+        if callService.isRecording, teamsActive { teamsSeenDuringCall = true }
+        // A recording is tied to Teams when Teams started it OR Teams joined a
+        // manual one — either way it ends with the Teams call.
+        let teamsBound = callService.isRecording && teamsSeenDuringCall
+        switch teamsDebouncer.tick(callActive: teamsActive, recording: teamsBound) {
         case .start:
-            guard !callService.isRecording, !suppressTeamsAutoUntilIdle, !recordingService.isRecording else { return }
+            guard !callService.isRecording, !suppressTeamsAutoUntilIdle else { return }
             showConsentReminderOnce()
             startCall(source: "teams-auto")
         case .stop:
+            CallStore.shared.logEvent("teams call ended → stopping")
             Task { await stopCallAndProcess() }
         case .none:
             break
@@ -356,6 +393,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if recordingService.isRecording {
             // Second press: stop → transcribe → process → output → log
+            isProcessingDictation = true
+            defer { isProcessingDictation = false }
             // Capture the frontmost app PID NOW — before any async work —
             // so the paste keystroke targets the correct app even after
             // a few seconds of processing.
@@ -398,6 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Output — returns true if clipboard was used instead of AX insertion
                 let usedClipboard = try await outputService.output(
                     text: processed, mode: outputMode, targetPID: targetPID)
+                isProcessingDictation = false   // pasted — the next press may start a new dictation
 
                 // Local history (respects the privacy toggle) + last-dictation in the panel
                 if settings?.historyEnabled ?? true {
@@ -465,6 +505,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Clean up the temp audio file (no-op when it was rescued)
             audio?.cleanup()
 
+        } else if isProcessingDictation {
+            // The previous dictation is still being transcribed/pasted. Starting
+            // a new recording now produced a second, stray recording.
+            NSSound.beep()
+            return
         } else {
             // First press: start recording.
             // Warm up the TLS connection to api.openai.com in parallel — the
